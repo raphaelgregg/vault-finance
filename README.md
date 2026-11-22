@@ -92,6 +92,20 @@ npx firebase deploy --only firestore:rules,firestore:indexes \
 > (`Missing or insufficient permissions`). A aplicação só persiste dados depois de
 > publicar `firestore.rules`.
 
+#### Sintoma: "leitura negada pelas regras publicadas" (Dashboard, Bancos, Transferências, Devedores, Metas)
+
+Significa que as Rules **publicadas** no Firebase são anteriores à VF-ARQ-02 e não têm `match /users/{userId}/reversals/{reversalId}`
+(leitura do dono). Sem ela, o navegador não consegue ler estornos e, **de propósito**, não exibe saldo, fechamento nem guardado de metas
+(estorno pode existir sem que o app consiga vê-lo). O `firestore.rules` do repositório já contém a regra; falta publicar.
+
+1. Publicar (autorização do dono do projeto): os comandos acima (`firestore:rules,firestore:indexes`). Ordem segura: **Rules primeiro**, depois
+   a função de servidor (`/api/finance`) — o inverso cria estornos que o navegador ainda não lê.
+2. Alternativa pelo Console: Firebase Console → Firestore Database → **Regras** → colar o conteúdo de `firestore.rules` → **Publicar**.
+3. Conferir: Console → Firestore → Regras mostra a data/hora da publicação e o texto contendo `reversals`. Depois, recarregue as telas
+   (Ctrl+F5) e confira que os avisos sumiram.
+4. Reproduzir o sintoma localmente sem tocar em produção: `node tests/e2e/all-pages.mjs` (roda todas as telas com as Rules do repositório e
+   com as Rules antigas de `tests/fixtures/firestore.rules.legacy`).
+
 ### Rodar localmente
 
 ```bash

@@ -24,6 +24,7 @@ import {
 import { openDebtorInstallments } from './devedores-parcelas.js';
 
 import { todayInAppZone, currentMonthKey } from '../utils/dates.js';
+import { isPermissionDenied } from '../utils/reversalsAccess.js';
 export const meta = { title: 'Devedores', icon: 'users' };
 
 let currentUser = null;
@@ -32,6 +33,7 @@ let showArchived = false;
 let debtorsCache = [];
 let statements = new Map(); // fechamento do mês por devedor (VF-2-03j)
 let statementsFailed = false;
+let statementsDenied = false; // falha por leitura NEGADA (Rules publicadas sem `reversals`) × erro de conexão
 let month = currentMonthKey();
 
 export async function render(target, { user }) {
@@ -51,10 +53,12 @@ async function reloadStatements() {
   try {
     statements = await loadDebtorStatements(currentUser.uid, debtorsCache, month);
     statementsFailed = false;
+    statementsDenied = false;
   } catch (error) {
     console.error('[devedores] falha ao calcular o fechamento do mês', error);
     statements = new Map();
     statementsFailed = true;
+    statementsDenied = isPermissionDenied(error) || error?.code === 'reversals-unavailable';
   }
 }
 
@@ -91,7 +95,12 @@ function renderPage() {
   });
   const monthBar = el('div', { class: 'form__field' }, [el('label', { for: 'closing-month', text: 'Mês de fechamento' }), monthInput]);
   const failedNotice = statementsFailed
-    ? el('p', { class: 'notice', role: 'alert', text: 'Não foi possível calcular o fechamento do mês. A lista abaixo continua válida; recarregue para tentar de novo.' })
+    ? el('div', { class: 'notice', role: 'alert', id: 'closing-unavailable', 'data-kind': statementsDenied ? 'denied' : 'error' }, [
+      el('span', { text: `Não foi possível calcular o fechamento do mês: ${statementsDenied
+        ? 'a leitura dos recebimentos e estornos foi negada pelas regras de acesso publicadas, então não é possível saber o que já foi recebido.'
+        : 'erro de conexão ou indisponibilidade ao ler recebimentos e estornos.'} Nenhum total é exibido. A lista de devedores continua válida. ` }),
+      el('button', { type: 'button', class: 'btn btn--secondary', id: 'retry-closing', onClick: async () => { await reloadStatements(); renderPage(); }, text: 'Tentar novamente' }),
+    ])
     : null;
 
   const cards = el('div', { class: 'grid grid--cards' }, [
