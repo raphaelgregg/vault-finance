@@ -356,6 +356,13 @@ Convenção de IDs: `VF-<fase>-<nn>`. Preservar IDs; não remover tarefas conclu
 - Aceite (cumprido): integração (Emulator) — cancela o conjunto e deixa as não selecionadas, idempotência, tudo-ou-nada (recebimento parcial / inexistente / já cancelada), validação 400 e isolamento entre usuários, corrida `cancelMany` × recebimento 10×; E2E — duas parcelas de meses diferentes em UMA requisição `debt.cancelMany` e seleção em massa.
 - Observação: o cancelamento múltiplo é atômico, ao contrário da quitação em lote (por parcela). Mais de 100 parcelas exigem repetir. Mudança de contrato do servidor ⇒ vale no próximo deploy das funções (não há deploy de Rules).
 
+- [x] **VF-COR-06 — Layout do modal de Dívidas do devedor** (Baixo) — CONCLUÍDA 2026-11-23
+- Problema: o diálogo tinha largura fixa de 560px e a tabela (até 10 colunas) tinha 1312px de conteúdo ⇒ rolagem horizontal escondia Valor/Recebido/Situação/Ações; cartões de resumo gigantes empurravam a tabela para baixo da dobra.
+- Solução (só apresentação; nenhuma regra, cálculo ou contrato mudou): `openModal({ size: 'wide' })` (`modal__dialog--wide`, até 1180px); `dataTable({ compact, colunas wrap })`; modal de dívidas com resumo compacto em uma linha (`.debt-summary`), barra única (filtro de mês + Nova dívida + Quitar todas) e barra de seleção; descrição/situação quebram linha só onde preciso, rótulos de situação sem quebra.
+- Arquivos: js/components/modal.js, js/components/form-kit.js, js/modules/devedores-parcelas.js, css/components.css.
+- Aceite (cumprido): medido no navegador (1366×768) — conteúdo da tabela 1146px em área de 1146px (sem rolagem horizontal; antes 1312 em 526); E2E completo sem alterações nos seletores.
+- Limite: em celular (≤ 400px) a tabela continua com rolagem horizontal (10 colunas); layout em cartões para mobile não foi feito.
+
 ### Fase 3 — Arquitetura, qualidade e refatoração
 
 - [x] **VF-3-01 — Reduzir duplicação nos services** (Médio) — CONCLUÍDA 2026-11-18: extrair helper de create/update/delete com auditoria reutilizando `firestore.js`, sem mudar API pública. Arquivos: `js/services/*.js`. Dependências: VF-1-01. Aceite: testes existentes passam sem alteração; diff líquido de linhas negativo.
@@ -452,3 +459,4 @@ Convenção de IDs: `VF-<fase>-<nn>`. Preservar IDs; não remover tarefas conclu
 - 2026-11-23 — CI migrado para Node LTS (22 e 24); Node 18 descontinuado (causa: `crypto` global ausente).
 - 2026-11-23 — VF-COR-04 concluída (cancelar dívida inteira de devedor).
 - 2026-11-23 — VF-COR-05 concluída (cancelar várias parcelas selecionadas em 1 requisição: `debt.cancelMany`).
+- 2026-11-23 — VF-COR-06 concluída (layout do modal de Dívidas: modal largo, tabela compacta, resumo em uma linha).

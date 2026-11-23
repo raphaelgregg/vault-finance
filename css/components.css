@@ -179,6 +179,21 @@
   border-bottom: 0;
 }
 
+/* Tabela compacta (modais largos): menos respiro; colunas `wrap` quebram linha em vez de forçar rolagem horizontal. */
+.table--compact th,
+.table--compact td {
+  padding: 8px 10px;
+}
+
+.table td.wrap {
+  white-space: normal;
+  min-width: 140px;
+}
+
+.table--compact .badge {
+  white-space: nowrap;
+}
+
 /* ---------- Estado vazio ---------- */
 .empty {
   display: flex;
@@ -243,6 +258,10 @@
   border-radius: var(--radius-lg);
   border: 1px solid var(--border);
   box-shadow: var(--shadow-md);
+}
+
+.modal__dialog--wide {
+  width: min(1180px, 100%);
 }
 
 .modal__header,
@@ -439,3 +458,18 @@ td.actions { white-space: nowrap; }
 .maint-log__line--ok { color: var(--success, #1f7a5c); }
 .maint-log__line--error { color: var(--danger, #b00020); }
 .maint-log__line--denied { color: var(--danger, #b00020); font-weight: 700; }
+
+/* Modal de dívidas do devedor: resumo compacto em uma linha, barra de ações única e tabela sem rolagem em telas largas. */
+.debt-modal .debt-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+.debt-modal .card { padding: var(--space-3) var(--space-4); gap: 4px; }
+.debt-modal .card__value { font-size: var(--fs-xl); }
+.debt-modal .card__label { margin: 0; font-size: var(--fs-sm); color: var(--text-muted); }
+.debt-modal .toolbar { margin-bottom: var(--space-3); }
+.debt-modal .toolbar .form__field { margin: 0; }
+.debt-modal .toolbar .btn { padding: 8px 12px; }
+.debt-modal .toolbar__info { font-size: var(--fs-sm); color: var(--text-muted); align-self: center; }
