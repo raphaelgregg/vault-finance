@@ -20,7 +20,7 @@ Este arquivo contém regras permanentes. O estado operacional vive em `PLAN.md`.
 | Objetivo | Comando |
 |---|---|
 | Emuladores (Auth 9099, Firestore 8080, UI 4000) | `npm run emulators` |
-| Testes das Security Rules (exige Java 11+ e Node 18+) | `npm run test:rules` |
+| Testes das Security Rules (exige Java 11+ e Node 22+ — LTS) | `npm run test:rules` |
 | Servir estático em :5500 | `npm run serve` |
 | Deploy de regras/índices | `npx firebase deploy --only firestore:rules,firestore:indexes` (somente com autorização) |
 
