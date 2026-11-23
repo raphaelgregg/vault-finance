@@ -67,16 +67,19 @@ export function emptyBlock(icon, title, text) {
 /** Célula: `render` pode devolver texto ou um nó DOM (ex.: barra de progresso). */
 function cell(column, item) {
   const value = column.render ? column.render(item[column.key], item) : (item[column.key] ?? '—');
-  const td = el('td', { class: column.numeric ? 'num' : '' });
+  const td = el('td', { class: [column.numeric ? 'num' : '', column.wrap ? 'wrap' : ''].filter(Boolean).join(' ') });
   if (value instanceof Node) td.append(value);
   else td.textContent = value;
   return td;
 }
 
-/** Tabela com render por coluna e coluna de ações opcional (`actions(item) → nós`). */
-export function dataTable({ columns, rows, actions }) {
+/**
+ * Tabela com render por coluna e coluna de ações opcional (`actions(item) → nós`).
+ * `compact`: densidade menor (modais largos). Coluna `wrap: true`: o texto pode quebrar linha (descrições longas).
+ */
+export function dataTable({ columns, rows, actions, compact = false }) {
   return el('div', { class: 'table-wrap' }, [
-    el('table', { class: 'table' }, [
+    el('table', { class: compact ? 'table table--compact' : 'table' }, [
       el('thead', {}, [el('tr', {}, [
         ...columns.map((c) => el('th', { class: c.numeric ? 'num' : '', text: c.label })),
         actions ? el('th', { text: 'Ações' }) : null,

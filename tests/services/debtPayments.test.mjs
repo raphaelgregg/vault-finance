@@ -6,6 +6,8 @@ import assert from 'node:assert/strict';
 import {
   createDebt,
   cancelDebt,
+  cancelDebts,
+  CANCEL_MANY_MAX,
   registerDebtPayment,
   getDebtStatusOptions,
 } from '../../js/services/debtPayments.js';
@@ -155,6 +157,32 @@ describe('cancelDebt', () => {
     assert.equal(m.calls.update.length + m.calls.audit.length, 0);
     const refused = await cancelDebt(uid, 'd1', { ...m.io, finance: async () => ({ ok: false, code: 'INVALID_STATE', errors: { _form: 'A parcela já possui recebimentos e não pode ser cancelada.' } }) });
     assert.deepEqual([refused.ok, refused.code], [false, 'INVALID_STATE']);
+  });
+});
+
+describe('cancelDebts (várias parcelas em 1 requisição)', () => {
+  it('envia UMA chamada debt.cancelMany com os ids únicos e a operationId; o cliente não grava nada', async () => {
+    const calls = [];
+    const finance = async (op, params, opts) => { calls.push([op, params, opts.operationId]); return { ok: true, count: 3, status: 'cancelled' }; };
+    const m = makeIo();
+    const r = await cancelDebts(uid, ['p1', 'p2', 'p2', 'p3'], { ...m.io, finance, operationId: 'op-12345678' });
+    assert.deepEqual([r.ok, r.count, r.operationId], [true, 3, 'op-12345678']);
+    assert.deepEqual(calls, [['debt.cancelMany', { debtIds: ['p1', 'p2', 'p3'] }, 'op-12345678']]);
+    assert.equal(m.calls.update.length + m.calls.create.length + m.calls.atomic.length + m.calls.audit.length, 0);
+  });
+
+  it('recusa do servidor (tudo ou nada) é devolvida com a mensagem e o código', async () => {
+    const finance = async () => ({ ok: false, code: 'INVALID_STATE', errors: { _form: 'Há parcela selecionada com recebimentos.' } });
+    const r = await cancelDebts(uid, ['p1', 'p2'], { ...makeIo().io, finance });
+    assert.deepEqual([r.ok, r.code, r.errors._form], [false, 'INVALID_STATE', 'Há parcela selecionada com recebimentos.']);
+  });
+
+  it('seleção vazia ou acima do teto: recusa sem chamar o servidor', async () => {
+    let called = false;
+    const io = { ...makeIo().io, finance: async () => { called = true; return { ok: true }; } };
+    assert.equal((await cancelDebts(uid, [], io)).ok, false);
+    assert.equal((await cancelDebts(uid, Array.from({ length: CANCEL_MANY_MAX + 1 }, (_, i) => `p${i}`), io)).ok, false);
+    assert.equal(called, false);
   });
 });
 

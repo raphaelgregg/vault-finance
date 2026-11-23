@@ -3,11 +3,11 @@ import { el } from './dom.js';
 
 let current = null;
 
-export function openModal({ title, body, footer = [], onClose }) {
+export function openModal({ title, body, footer = [], onClose, size }) {
   closeModal();
 
   const dialog = el('div', {
-    class: 'modal__dialog',
+    class: size === 'wide' ? 'modal__dialog modal__dialog--wide' : 'modal__dialog',
     role: 'dialog',
     'aria-modal': 'true',
     'aria-label': title,

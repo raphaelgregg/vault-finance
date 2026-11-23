@@ -250,6 +250,24 @@ export async function cancelDebt(uid, debtId, io = {}) {
   return r.ok ? { ok: true, result: r } : r;
 }
 
+/** Teto de parcelas por cancelamento múltiplo (o mesmo do servidor: `CANCEL_MANY_MAX` em server/finance/ops.mjs). */
+export const CANCEL_MANY_MAX = 100;
+
+/**
+ * Cancela VÁRIAS parcelas (uma dívida inteira ou uma seleção) em UMA requisição ao servidor (`debt.cancelMany`):
+ * uma transação, tudo ou nada. O servidor revalida cada parcela (pendente/atrasada e sem recebimentos); se alguma
+ * não puder ser cancelada, nenhuma é alterada. Idempotente: repetir com a MESMA `io.operationId` devolve o resultado.
+ * Retorna { ok, count, operationId } ou { ok:false, errors, code }.
+ */
+export async function cancelDebts(uid, debtIds, io = {}) {
+  const ids = [...new Set(Array.isArray(debtIds) ? debtIds : [])];
+  if (!ids.length) return { ok: false, errors: { _form: 'Selecione ao menos uma parcela para cancelar.' } };
+  if (ids.length > CANCEL_MANY_MAX) return { ok: false, errors: { _form: `Cancele no máximo ${CANCEL_MANY_MAX} parcelas por vez.` } };
+  const operationId = io.operationId ?? newOperationId();
+  const r = await finance(io)('debt.cancelMany', { debtIds: ids }, { operationId, ...(io.apiOptions ?? {}) });
+  return r.ok ? { ok: true, count: r.count ?? ids.length, operationId } : { ...r, operationId };
+}
+
 export function getDebtStatusOptions() {
   return DEBT_STATUSES.map((s) => ({ value: s.value, label: s.label }));
 }
