@@ -250,6 +250,32 @@ export async function cancelDebt(uid, debtId, io = {}) {
   return r.ok ? { ok: true, result: r } : r;
 }
 
+/**
+ * Cancela a DÍVIDA inteira: todas as parcelas informadas (pendentes/atrasadas, sem recebimentos), uma a uma pelo
+ * `debt.cancel` do servidor — cada parcela é uma transação própria e o servidor revalida status e recebimentos.
+ * A chave de idempotência de cada parcela deriva da chave da operação (`<operationId>:<debtId>`): repetir com a MESMA
+ * `operationId` após uma falha continua de onde parou, sem recancelar. Para na primeira recusa.
+ * Retorna { ok, count, operationId } ou { ok:false, partial, cancelled, errors, code, operationId }.
+ */
+export async function cancelDebtGroup(uid, debtIds, io = {}) {
+  const ids = [...new Set(Array.isArray(debtIds) ? debtIds : [])];
+  if (!ids.length) return { ok: false, errors: { _form: 'Não há parcelas pendentes sem recebimentos para cancelar.' } };
+  const base = io.operationId ?? newOperationId();
+  let cancelled = 0;
+  for (const debtId of ids) {
+    const r = await finance(io)('debt.cancel', { debtId }, { operationId: `${base}:${debtId}`, ...(io.apiOptions ?? {}) });
+    if (!r.ok) {
+      const reason = r.errors?._form ?? 'Falha ao cancelar a parcela.';
+      const message = cancelled > 0
+        ? `Cancelamento concluído em parte: ${cancelled} de ${ids.length} parcela(s) cancelada(s). ${reason} Repita para continuar.`
+        : reason;
+      return { ...r, ok: false, partial: cancelled > 0, cancelled, operationId: base, errors: { ...(r.errors ?? {}), _form: message } };
+    }
+    cancelled += 1;
+  }
+  return { ok: true, count: cancelled, operationId: base };
+}
+
 export function getDebtStatusOptions() {
   return DEBT_STATUSES.map((s) => ({ value: s.value, label: s.label }));
 }

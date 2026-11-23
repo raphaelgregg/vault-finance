@@ -492,6 +492,56 @@ try {
   await page.keyboard.press('Escape');
 
   log('VF-2-03q: dashboard — blocos de saldo livre/vinculado, previsto, faturas do mês e devedores');
+  log('cancelar a DÍVIDA inteira (parcelada): cancela as parcelas pendentes sem recebimento e mantém as com recebimento');
+  const cancelSeed = await page.evaluate(async () => {
+    const { createDebtor } = await import('/js/services/debtors.js');
+    const { createDebtPlan, listDebts, settleInstallment, registerDebtPayment } = await import('/js/services/debtPayments.js');
+    const { listAccounts } = await import('/js/services/accounts.js');
+    const { auth } = await import('/js/firebase/client.js');
+    const uid = auth.currentUser.uid;
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+    const acc = (await listAccounts(uid)).find((a) => a.institution === 'Banco E2E');
+    const make = async (name, description) => {
+      const debtor = await createDebtor(uid, { name, lentCents: '300,00', loanDate: today });
+      const plan = await createDebtPlan(uid, { debtorId: debtor.id, description, totalCents: '300,00', installments: 3, firstDueDate: today });
+      return { debtor, plan };
+    };
+    const a = await make('Cancela Tudo', 'Sofá');
+    const b = await make('Cancela Parcial', 'Mesa');
+    const [first, second] = (await listDebts(uid, b.debtor.id)).sort((x, y) => x.installmentNumber - y.installmentNumber);
+    const paid = await settleInstallment(uid, b.debtor.id, { debtId: first.id }, { date: today, accountId: acc.id });
+    const partial = await registerDebtPayment(uid, second.id, { amountCents: '40,00', date: today, accountId: acc.id });
+    return { aOk: a.plan.ok, bOk: b.plan.ok, paidOk: paid.ok && partial.ok, errors: [a.plan.errors, b.plan.errors, paid.errors, partial.errors] };
+  });
+  assert.deepEqual([cancelSeed.aOk, cancelSeed.bOk, cancelSeed.paidOk], [true, true, true], JSON.stringify(cancelSeed.errors));
+  const debtStatuses = (name) => page.evaluate(async (devName) => {
+    const { listDebtors } = await import('/js/services/debtors.js');
+    const { listDebts } = await import('/js/services/debtPayments.js');
+    const { auth } = await import('/js/firebase/client.js');
+    const uid = auth.currentUser.uid;
+    const debtor = (await listDebtors(uid)).find((d) => d.name === devName);
+    return (await listDebts(uid, debtor.id)).sort((x, y) => x.installmentNumber - y.installmentNumber).map((d) => d.status);
+  }, name);
+  const cancelFromUi = async (devName, debtName) => {
+    await page.goto(`${app.base}/pages/devedores.html`);
+    await page.waitForSelector('#page-content tbody tr');
+    await page.getByRole('button', { name: `Parcelas e recebimentos de ${devName}` }).click();
+    await page.waitForSelector('#statement-month');
+    await page.getByRole('button', { name: `Cancelar dívida ${debtName}` }).first().click();
+    return page.locator('.modal').last().innerText();
+  };
+  const cancelAllText = await cancelFromUi('Cancela Tudo', 'Sofá');
+  assert.match(cancelAllText, /Cancelar 3 parcela\(s\) pendente\(s\) de "Sofá"/);
+  await page.getByRole('button', { name: 'Cancelar dívida', exact: true }).click();
+  await page.waitForFunction(() => /Dívida cancelada \(3 parcela\(s\)\)/.test(document.querySelector('.toast')?.innerText ?? ''));
+  assert.deepEqual(await debtStatuses('Cancela Tudo'), ['cancelled', 'cancelled', 'cancelled']);
+  const partialText = await cancelFromUi('Cancela Parcial', 'Mesa');
+  assert.match(partialText, /Cancelar 1 parcela\(s\)/);
+  assert.match(partialText, /1 parcela\(s\) com recebimento serão mantidas/);
+  await page.getByRole('button', { name: 'Cancelar dívida', exact: true }).click();
+  await page.waitForFunction(() => /Dívida cancelada \(1 parcela\(s\)\)/.test(document.querySelector('.toast')?.innerText ?? ''));
+  assert.deepEqual(await debtStatuses('Cancela Parcial'), ['paid', 'pending', 'cancelled']); // 2ª tem recebimento parcial: mantida
+
   await page.goto(`${app.base}/pages/dashboard.html`);
   await page.waitForSelector('#dashboard-month');
   const dash = await page.locator('#page-content').innerText();

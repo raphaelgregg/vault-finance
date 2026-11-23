@@ -10,7 +10,7 @@ import {
   formatDate, formatMonth, formatCentsInput, selectOptions, todayIso,
 } from '../components/form-kit.js';
 import {
-  listDebts, listDebtPayments, createDebtPlan, cancelDebt, settleDebts, settleInstallment, settleMonthInstallments,
+  listDebts, listDebtPayments, createDebtPlan, cancelDebt, cancelDebtGroup, settleDebts, settleInstallment, settleMonthInstallments,
   previewMonthSettlement, newOperationId, formatCents,
 } from '../services/debtPayments.js';
 import { debtorPendingCents, debtorObligations, receivedByInstallment, accountLabel } from '../core/model.js';
@@ -232,6 +232,26 @@ async function openDebtorInstallmentsInner({ user, debtor, onChange, month = 'al
         if (!debt || !['pending', 'late'].includes(debt.status)) return acts;
         // Quitar a DÍVIDA inteira (todas as parcelas pendentes dela) é outra operação: só aparece em dívida parcelada.
         if ((debt.installmentsTotal ?? 1) > 1) acts.push(iconButton(`Quitar dívida ${debt.description}`, 'check-check', () => openSettle(debt.debtGroupId ?? debt.id, debt.description), 'btn--secondary'));
+        // Cancelar a DÍVIDA inteira: só as parcelas pendentes/atrasadas SEM recebimentos; as com recebimento ficam
+        // (o servidor recusa cancelá-las: estorne o recebimento antes). Só aparece em dívida parcelada.
+        if ((debt.installmentsTotal ?? 1) > 1) {
+          const groupKey = debt.debtGroupId ?? debt.id;
+          const open = debts.filter((d) => (d.debtGroupId ?? d.id) === groupKey && ['pending', 'late'].includes(d.status));
+          const cancellable = open.filter((d) => !(receivedBy.get(d.id) > 0));
+          const kept = open.length - cancellable.length;
+          if (cancellable.length) {
+            acts.push(iconButton(`Cancelar dívida ${debt.description}`, 'ban', () => confirmModal({
+              title: 'Cancelar dívida',
+              message: `Cancelar ${cancellable.length} parcela(s) pendente(s) de "${debt.description}" de ${debtor.name}?`,
+              hint: kept ? `${kept} parcela(s) com recebimento serão mantidas: estorne o recebimento para poder cancelá-las. Parcelas já pagas não mudam.` : 'Parcelas já pagas não mudam.',
+              confirmLabel: 'Cancelar dívida',
+              onConfirm: async () => {
+                const r = await cancelDebtGroup(user.uid, cancellable.map((d) => d.id));
+                if (r.ok) { toast(`Dívida cancelada (${r.count} parcela(s)).`); await refresh(); } else { toast(r.errors._form, 7000); if (r.partial) await refresh(); else reopen(); }
+              },
+            }), 'btn--danger'));
+          }
+        }
         if (!(receivedBy.get(debt.id) > 0)) {
           acts.push(iconButton(`Cancelar parcela ${debt.installmentNumber} de ${debt.description}`, 'x-circle', () => confirmModal({
             title: 'Cancelar parcela', message: `Cancelar a parcela ${debt.installmentNumber} de ${debtor.name}?`, confirmLabel: 'Cancelar parcela',

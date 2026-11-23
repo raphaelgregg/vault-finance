@@ -342,6 +342,13 @@ Convenção de IDs: `VF-<fase>-<nn>`. Preservar IDs; não remover tarefas conclu
 - **Regressão da página:** `tests/e2e/maintenance-inventory.mjs` compara TODOS os controles (id, tipo, nome, texto, placeholder, rótulo, valor, opções, desabilitado, ordem) com a linha de base gravada ANTES da implementação (`tests/e2e/fixtures/manutencao-inventory.json`: 41 controles comum, 64 admin) — idêntico; `tests/e2e/maintenance.mjs` (todos os fluxos existentes) segue passando.
 - **Limitação/atenção:** popular mistura contas e valores `[DEMO]` aos totais do administrador até a remoção (é o propósito). Não verificado em produção (credencial, claim real).
 
+- [x] **VF-COR-04 — Cancelar a dívida inteira de um devedor** (Médio) — CONCLUÍDA 2026-11-23
+- Problema: em Devedores só existia cancelar UMA parcela por vez (`debt.cancel`); uma dívida parcelada não podia ser cancelada de uma vez.
+- Solução: `cancelDebtGroup` (`js/services/debtPayments.js`) cancela, uma a uma, as parcelas pendentes/atrasadas SEM recebimentos pelo `debt.cancel` existente (cada parcela é transação própria; o servidor revalida status e recebimentos). Chave por parcela `<operationId>:<debtId>` ⇒ repetir após falha retoma sem recancelar; para na primeira recusa e informa o parcial. Botão "Cancelar dívida X" (ícone `ban`) na lista de parcelas, só em dívida parcelada com parcela elegível; o modal informa quantas serão canceladas e que parcelas com recebimento são mantidas (estornar o recebimento antes) e as pagas não mudam. Servidor, Rules e contratos NÃO alterados.
+- Arquivos: js/services/debtPayments.js, js/modules/devedores-parcelas.js, tests/services/debtPayments.test.mjs, tests/e2e/debtors.mjs.
+- Aceite (cumprido): unit 655 ok; E2E de Devedores cobre dívida de 3 parcelas (todas canceladas) e dívida com 1 parcela paga + 1 com recebimento parcial (só a 3ª cancelada; `['paid','pending','cancelled']`).
+- Limite conhecido: o cancelamento da dívida inteira não é uma única transação (consistência por parcela, como a quitação em lote). **Não coberto:** parcelas vindas de COMPRA DE CARTÃO vinculada ao devedor continuam sem ação de cancelar (mexeria em compra/fatura) — decisão pendente.
+
 ### Fase 3 — Arquitetura, qualidade e refatoração
 
 - [x] **VF-3-01 — Reduzir duplicação nos services** (Médio) — CONCLUÍDA 2026-11-18: extrair helper de create/update/delete com auditoria reutilizando `firestore.js`, sem mudar API pública. Arquivos: `js/services/*.js`. Dependências: VF-1-01. Aceite: testes existentes passam sem alteração; diff líquido de linhas negativo.
@@ -436,3 +443,4 @@ Convenção de IDs: `VF-<fase>-<nn>`. Preservar IDs; não remover tarefas conclu
 - 2026-11-20 — Decisão arquitetural registrada (VF-ARQ-01): concluir o endurecimento e depois avaliar backend confiável; sem migração antecipada.
 - 2026-11-23 — VF-3-05 concluída (reestruturação: model/ dividido, money único, dom.js, server/admin, docs/ARCHITECTURE.md).
 - 2026-11-23 — CI migrado para Node LTS (22 e 24); Node 18 descontinuado (causa: `crypto` global ausente).
+- 2026-11-23 — VF-COR-04 concluída (cancelar dívida inteira de devedor).
