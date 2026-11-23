@@ -297,6 +297,37 @@ defineOp('debt.cancel', {
   },
 });
 
+/** Máximo de parcelas por cancelamento múltiplo (uma transação: limite de escritas do Firestore e tempo da função). */
+export const CANCEL_MANY_MAX = 100;
+
+/**
+ * Cancela VÁRIAS parcelas em UMA requisição e UMA transação (tudo ou nada): cada parcela precisa estar pendente/atrasada e
+ * sem recebimentos — as mesmas regras de `debt.cancel`. Se qualquer uma não puder ser cancelada (ex.: ganhou um recebimento
+ * entre a seleção e a confirmação), NENHUMA é alterada. Idempotente por `operationId` (como as demais operações).
+ */
+defineOp('debt.cancelMany', {
+  validate: (p) => {
+    if (!Array.isArray(p.debtIds) || !p.debtIds.length) throw new FinanceError(400, 'INVALID_PARAM', 'Informe as parcelas a cancelar (debtIds).');
+    if (p.debtIds.length > CANCEL_MANY_MAX) throw new FinanceError(400, 'INVALID_PARAM', `Cancele no máximo ${CANCEL_MANY_MAX} parcelas por vez.`);
+    return { debtIds: [...new Set(p.debtIds.map((id) => v.id(id, 'debtIds')))].sort() }; // ordem estável ⇒ mesmo hash na repetição
+  },
+  async prepare(ctx, p) {
+    const debts = [];
+    for (const id of p.debtIds) {
+      const debt = await ctx.get('debts', id);
+      if (!debt) throw new FinanceError(404, 'NOT_FOUND', 'Parcela não encontrada.', { debtId: id });
+      if (!['pending', 'late'].includes(debt.status)) throw invalidState('Só é possível cancelar parcelas pendentes ou atrasadas.', { debtId: id, status: debt.status });
+      const { count } = await installmentReceived(ctx, 'debt', id);
+      if (count > 0) throw invalidState('Há parcela selecionada com recebimentos: ela não pode ser cancelada (estorne-os antes). Nada foi cancelado.', { debtId: id });
+      debts.push(debt);
+    }
+    return {
+      result: { debtIds: p.debtIds, count: debts.length, status: 'cancelled' },
+      apply: (c) => { for (const debt of debts) c.tx.update(c.ref('debts', debt.id), { status: 'cancelled', ...stamps() }); },
+    };
+  },
+});
+
 // ---------------------------------------------------------------------------------------------------------------
 // Quitação em LOTE retomável (por mês, por dívida ou todas) — consistência POR PARCELA, estado explícito do lote
 // ---------------------------------------------------------------------------------------------------------------
