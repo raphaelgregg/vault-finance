@@ -542,6 +542,47 @@ try {
   await page.waitForFunction(() => /Dívida cancelada \(1 parcela\(s\)\)/.test(document.querySelector('.toast')?.innerText ?? ''));
   assert.deepEqual(await debtStatuses('Cancela Parcial'), ['paid', 'pending', 'cancelled']); // 2ª tem recebimento parcial: mantida
 
+  log('cancelar VÁRIAS parcelas selecionadas (meses diferentes) em uma única requisição');
+  await page.evaluate(async () => {
+    const { createDebtor } = await import('/js/services/debtors.js');
+    const { createDebtPlan } = await import('/js/services/debtPayments.js');
+    const { auth } = await import('/js/firebase/client.js');
+    const uid = auth.currentUser.uid;
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+    const debtor = await createDebtor(uid, { name: 'Cancela Varias', lentCents: '400,00', loanDate: today });
+    await createDebtPlan(uid, { debtorId: debtor.id, description: 'Carro', totalCents: '400,00', installments: 4, firstDueDate: today });
+  });
+  const cancelManyRequests = [];
+  page.on('request', (rq) => { if (rq.url().includes('/api/finance') && /debt\.cancel/.test(rq.postData() ?? '')) cancelManyRequests.push(rq.postDataJSON()); });
+  await page.goto(`${app.base}/pages/devedores.html`);
+  await page.waitForSelector('#page-content tbody tr');
+  await page.getByRole('button', { name: 'Parcelas e recebimentos de Cancela Varias' }).click();
+  await page.waitForSelector('#statement-month');
+  await page.selectOption('#statement-month', 'all');
+  await page.waitForSelector('.cancel-pick');
+  assert.match(await page.locator('#cancel-selected-count').innerText(), /Nenhuma parcela selecionada/);
+  assert.equal(await page.locator('#cancel-selected').isDisabled(), true);
+  await page.getByLabel('Selecionar parcela 2 de Carro').check();
+  await page.getByLabel('Selecionar parcela 4 de Carro').check();
+  assert.match(await page.locator('#cancel-selected-count').innerText(), /2 parcela\(s\) selecionada\(s\) · R\$\s?200,00/);
+  await page.locator('#cancel-selected').click();
+  await page.getByRole('button', { name: 'Cancelar 2 parcela(s)', exact: true }).click();
+  await page.waitForFunction(() => /2 parcela\(s\) cancelada\(s\)\./.test(document.querySelector('.toast')?.innerText ?? ''));
+  assert.deepEqual(await debtStatuses('Cancela Varias'), ['pending', 'cancelled', 'pending', 'cancelled']);
+  assert.equal(cancelManyRequests.length, 1, 'UMA requisição para as duas parcelas');
+  assert.equal(cancelManyRequests[0].op, 'debt.cancelMany');
+  assert.equal(cancelManyRequests[0].params.debtIds.length, 2);
+  // seleção em massa das restantes (seleção anterior foi zerada ao cancelar)
+  await page.waitForSelector('#statement-month');
+  await page.selectOption('#statement-month', 'all');
+  await page.getByRole('button', { name: /^Selecionar todas as pendentes de todos os meses \(2\)$/ }).click();
+  await page.waitForSelector('#cancel-selected:not([disabled])');
+  assert.match(await page.locator('#cancel-selected-count').innerText(), /2 parcela\(s\) selecionada\(s\)/);
+  await page.locator('#cancel-selected').click();
+  await page.getByRole('button', { name: 'Cancelar 2 parcela(s)', exact: true }).click();
+  await page.waitForFunction(() => /2 parcela\(s\) cancelada\(s\)\./.test(document.querySelector('.toast')?.innerText ?? ''));
+  assert.deepEqual(await debtStatuses('Cancela Varias'), ['cancelled', 'cancelled', 'cancelled', 'cancelled']);
+
   await page.goto(`${app.base}/pages/dashboard.html`);
   await page.waitForSelector('#dashboard-month');
   const dash = await page.locator('#page-content').innerText();

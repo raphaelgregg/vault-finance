@@ -6,7 +6,8 @@ import assert from 'node:assert/strict';
 import {
   createDebt,
   cancelDebt,
-  cancelDebtGroup,
+  cancelDebts,
+  CANCEL_MANY_MAX,
   registerDebtPayment,
   getDebtStatusOptions,
 } from '../../js/services/debtPayments.js';
@@ -159,36 +160,28 @@ describe('cancelDebt', () => {
   });
 });
 
-describe('cancelDebtGroup', () => {
-  const okFinance = (calls) => async (op, params, opts) => { calls.push([op, params, opts.operationId]); return { ok: true, debtId: params.debtId, status: 'cancelled' }; };
-
-  it('cancela cada parcela pelo servidor com chave derivada da operação (retry idempotente); o cliente não grava nada', async () => {
+describe('cancelDebts (várias parcelas em 1 requisição)', () => {
+  it('envia UMA chamada debt.cancelMany com os ids únicos e a operationId; o cliente não grava nada', async () => {
     const calls = [];
+    const finance = async (op, params, opts) => { calls.push([op, params, opts.operationId]); return { ok: true, count: 3, status: 'cancelled' }; };
     const m = makeIo();
-    const r = await cancelDebtGroup(uid, ['p1', 'p2', 'p2', 'p3'], { ...m.io, finance: okFinance(calls), operationId: 'op-12345678' });
+    const r = await cancelDebts(uid, ['p1', 'p2', 'p2', 'p3'], { ...m.io, finance, operationId: 'op-12345678' });
     assert.deepEqual([r.ok, r.count, r.operationId], [true, 3, 'op-12345678']);
-    assert.deepEqual(calls.map((c) => [c[0], c[1].debtId, c[2]]), [['debt.cancel', 'p1', 'op-12345678:p1'], ['debt.cancel', 'p2', 'op-12345678:p2'], ['debt.cancel', 'p3', 'op-12345678:p3']]);
+    assert.deepEqual(calls, [['debt.cancelMany', { debtIds: ['p1', 'p2', 'p3'] }, 'op-12345678']]);
     assert.equal(m.calls.update.length + m.calls.create.length + m.calls.atomic.length + m.calls.audit.length, 0);
   });
 
-  it('recusa do servidor interrompe, informa o parcial e não cancela as seguintes', async () => {
-    const calls = [];
-    const finance = async (op, params) => {
-      calls.push(params.debtId);
-      return params.debtId === 'p2' ? { ok: false, code: 'INVALID_STATE', errors: { _form: 'A parcela já possui recebimentos.' } } : { ok: true };
-    };
-    const r = await cancelDebtGroup(uid, ['p1', 'p2', 'p3'], { ...makeIo().io, finance });
-    assert.deepEqual(calls, ['p1', 'p2']);
-    assert.deepEqual([r.ok, r.partial, r.cancelled, r.code], [false, true, 1, 'INVALID_STATE']);
-    assert.match(r.errors._form, /1 de 3/);
-    const first = await cancelDebtGroup(uid, ['p2'], { ...makeIo().io, finance });
-    assert.deepEqual([first.ok, first.partial, first.errors._form], [false, false, 'A parcela já possui recebimentos.']);
+  it('recusa do servidor (tudo ou nada) é devolvida com a mensagem e o código', async () => {
+    const finance = async () => ({ ok: false, code: 'INVALID_STATE', errors: { _form: 'Há parcela selecionada com recebimentos.' } });
+    const r = await cancelDebts(uid, ['p1', 'p2'], { ...makeIo().io, finance });
+    assert.deepEqual([r.ok, r.code, r.errors._form], [false, 'INVALID_STATE', 'Há parcela selecionada com recebimentos.']);
   });
 
-  it('sem parcelas elegíveis: recusa sem chamar o servidor', async () => {
+  it('seleção vazia ou acima do teto: recusa sem chamar o servidor', async () => {
     let called = false;
-    const r = await cancelDebtGroup(uid, [], { ...makeIo().io, finance: async () => { called = true; return { ok: true }; } });
-    assert.equal(r.ok, false);
+    const io = { ...makeIo().io, finance: async () => { called = true; return { ok: true }; } };
+    assert.equal((await cancelDebts(uid, [], io)).ok, false);
+    assert.equal((await cancelDebts(uid, Array.from({ length: CANCEL_MANY_MAX + 1 }, (_, i) => `p${i}`), io)).ok, false);
     assert.equal(called, false);
   });
 });

@@ -344,10 +344,17 @@ Convenção de IDs: `VF-<fase>-<nn>`. Preservar IDs; não remover tarefas conclu
 
 - [x] **VF-COR-04 — Cancelar a dívida inteira de um devedor** (Médio) — CONCLUÍDA 2026-11-23
 - Problema: em Devedores só existia cancelar UMA parcela por vez (`debt.cancel`); uma dívida parcelada não podia ser cancelada de uma vez.
-- Solução: `cancelDebtGroup` (`js/services/debtPayments.js`) cancela, uma a uma, as parcelas pendentes/atrasadas SEM recebimentos pelo `debt.cancel` existente (cada parcela é transação própria; o servidor revalida status e recebimentos). Chave por parcela `<operationId>:<debtId>` ⇒ repetir após falha retoma sem recancelar; para na primeira recusa e informa o parcial. Botão "Cancelar dívida X" (ícone `ban`) na lista de parcelas, só em dívida parcelada com parcela elegível; o modal informa quantas serão canceladas e que parcelas com recebimento são mantidas (estornar o recebimento antes) e as pagas não mudam. Servidor, Rules e contratos NÃO alterados.
+- Solução: botão "Cancelar dívida X" (ícone `ban`, só em dívida parcelada com parcela elegível) → `cancelDebts` (ver VF-COR-05). Parcelas com recebimento são mantidas e as pagas não mudam (o modal informa).
 - Arquivos: js/services/debtPayments.js, js/modules/devedores-parcelas.js, tests/services/debtPayments.test.mjs, tests/e2e/debtors.mjs.
-- Aceite (cumprido): unit 655 ok; E2E de Devedores cobre dívida de 3 parcelas (todas canceladas) e dívida com 1 parcela paga + 1 com recebimento parcial (só a 3ª cancelada; `['paid','pending','cancelled']`).
-- Limite conhecido: o cancelamento da dívida inteira não é uma única transação (consistência por parcela, como a quitação em lote). **Não coberto:** parcelas vindas de COMPRA DE CARTÃO vinculada ao devedor continuam sem ação de cancelar (mexeria em compra/fatura) — decisão pendente.
+- Aceite (cumprido): E2E de Devedores cobre dívida de 3 parcelas (todas canceladas) e dívida com 1 parcela paga + 1 com recebimento parcial (só a 3ª cancelada).
+- **Não coberto:** parcelas vindas de COMPRA DE CARTÃO vinculada ao devedor continuam sem ação de cancelar (mexeria em compra/fatura) — decisão pendente.
+
+- [x] **VF-COR-05 — Cancelar várias parcelas selecionadas em 1 requisição** (Médio) — CONCLUÍDA 2026-11-23
+- Problema: para cancelar parcelas de meses diferentes era preciso cancelar uma a uma, mês a mês.
+- Solução: nova operação de servidor `debt.cancelMany` (`server/finance/ops.mjs`, teto `CANCEL_MANY_MAX = 100`): UMA requisição e UMA transação, TUDO OU NADA — cada parcela precisa estar pendente/atrasada e sem recebimentos (mesmas regras de `debt.cancel`); se qualquer uma falhar, nenhuma é alterada. Idempotente por `operationId` (ids ordenados/deduplicados ⇒ mesmo hash na repetição). Cliente: `cancelDebts` (`js/services/debtPayments.js`) envia só os ids (o servidor revalida tudo). Tela: coluna "Sel." (checkbox) nas parcelas elegíveis, "Selecionar todas as pendentes (do mês/de todos os meses)", "Limpar seleção" e "Cancelar selecionadas" com contagem e total; a seleção sobrevive à troca do filtro de mês (estado no módulo; zerado ao trocar de devedor e após cancelar). Rules inalteradas (a escrita é do Admin SDK, como `debt.cancel`).
+- Arquivos: server/finance/ops.mjs, js/services/debtPayments.js, js/modules/devedores-parcelas.js, tests/integration/server-debts.test.mjs, tests/services/{debtPayments,server-core}.test.mjs, tests/e2e/debtors.mjs.
+- Aceite (cumprido): integração (Emulator) — cancela o conjunto e deixa as não selecionadas, idempotência, tudo-ou-nada (recebimento parcial / inexistente / já cancelada), validação 400 e isolamento entre usuários, corrida `cancelMany` × recebimento 10×; E2E — duas parcelas de meses diferentes em UMA requisição `debt.cancelMany` e seleção em massa.
+- Observação: o cancelamento múltiplo é atômico, ao contrário da quitação em lote (por parcela). Mais de 100 parcelas exigem repetir. Mudança de contrato do servidor ⇒ vale no próximo deploy das funções (não há deploy de Rules).
 
 ### Fase 3 — Arquitetura, qualidade e refatoração
 
@@ -444,3 +451,4 @@ Convenção de IDs: `VF-<fase>-<nn>`. Preservar IDs; não remover tarefas conclu
 - 2026-11-23 — VF-3-05 concluída (reestruturação: model/ dividido, money único, dom.js, server/admin, docs/ARCHITECTURE.md).
 - 2026-11-23 — CI migrado para Node LTS (22 e 24); Node 18 descontinuado (causa: `crypto` global ausente).
 - 2026-11-23 — VF-COR-04 concluída (cancelar dívida inteira de devedor).
+- 2026-11-23 — VF-COR-05 concluída (cancelar várias parcelas selecionadas em 1 requisição: `debt.cancelMany`).

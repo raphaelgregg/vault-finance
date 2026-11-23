@@ -6,7 +6,7 @@
 import { describe, it, before, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { adminDb, clearAll, call, callOk, opId, seed, seedAccount, dump, getDoc, oracleBalance, UID, OTHER } from './helpers/server.mjs';
-import { BATCH_ITEMS_PER_CALL } from '../../server/finance/ops.mjs';
+import { BATCH_ITEMS_PER_CALL, CANCEL_MANY_MAX } from '../../server/finance/ops.mjs';
 import { auditLedgerData } from '../../js/core/integrity.js';
 
 before(() => adminDb());
@@ -293,5 +293,55 @@ describe('quitação em lote retomável (Fase 7)', () => {
     assert.equal((await call(UID, 'debt.settleBatch', key, batch({ scope: { month: '2027-01' } }))).body.error, 'OPERATION_ID_REUSED');
     assert.equal((await call(UID, 'debt.settleBatch', opId(), batch({ scope: { month: '2027-01' } }))).body.error, 'INVALID_STATE');
     assert.equal((await call(UID, 'debt.settleBatch', opId(), batch({ scope: {} }))).body.error, 'INVALID_PARAM');
+  });
+});
+
+describe('cancelamento de várias parcelas em 1 requisição (debt.cancelMany)', () => {
+  const statuses = async () => Object.fromEntries((await dump('debts')).map((d) => [d.id, d.status]));
+
+  it('cancela todas as selecionadas numa transação; as não selecionadas ficam; idempotente com a mesma chave', async () => {
+    await world({ n: 4, each: 1000 });
+    const key = opId('many');
+    const r = await callOk(UID, 'debt.cancelMany', key, { debtIds: ['p2', 'p0', 'p1', 'p1'] });
+    assert.deepEqual([r.count, r.status, r.idempotent], [3, 'cancelled', false]);
+    assert.deepEqual(await statuses(), { p0: 'cancelled', p1: 'cancelled', p2: 'cancelled', p3: 'pending' });
+    const again = await callOk(UID, 'debt.cancelMany', key, { debtIds: ['p1', 'p2', 'p0'] }); // ordem diferente, mesmo conjunto
+    assert.equal(again.idempotent, true);
+    assert.equal((await call(UID, 'debt.cancelMany', key, { debtIds: ['p3'] })).body.error, 'OPERATION_ID_REUSED');
+  });
+
+  it('TUDO OU NADA: uma parcela com recebimento, já paga ou inexistente recusa o conjunto e nada é cancelado', async () => {
+    const [p0, p1, p2] = await world({ n: 3, each: 1000 });
+    await callOk(UID, 'debt.receive', opId(), recv(p1, 400)); // recebimento parcial: parcela segue pendente, mas não é cancelável
+    const withReceipt = await call(UID, 'debt.cancelMany', opId(), { debtIds: [p0, p1, p2] });
+    assert.deepEqual([withReceipt.status, withReceipt.body.error], [409, 'INVALID_STATE']);
+    assert.equal((await call(UID, 'debt.cancelMany', opId(), { debtIds: [p0, 'inexistente'] })).body.error, 'NOT_FOUND');
+    assert.deepEqual(await statuses(), { p0: 'pending', p1: 'pending', p2: 'pending' });
+    await callOk(UID, 'debt.cancel', opId(), { debtId: p2 });
+    assert.equal((await call(UID, 'debt.cancelMany', opId(), { debtIds: [p0, p2] })).body.error, 'INVALID_STATE'); // p2 já cancelada
+    assert.equal((await statuses()).p0, 'pending');
+  });
+
+  it('validação: lista vazia/inválida e acima do teto são 400; parcela de OUTRO usuário nunca é alcançada', async () => {
+    await world({ n: 1, each: 1000 });
+    await world({ n: 1, each: 1000, uid: OTHER });
+    for (const debtIds of [[], 'p0', [1], ['a/b'], Array.from({ length: CANCEL_MANY_MAX + 1 }, (_, i) => `x${i}`)]) {
+      assert.equal((await call(UID, 'debt.cancelMany', opId(), { debtIds })).status, 400, JSON.stringify(debtIds).slice(0, 40));
+    }
+    const other = await call(OTHER, 'debt.cancelMany', opId(), { debtIds: ['p0'] });
+    assert.equal(other.status, 200); // a parcela p0 de OTHER é dele
+    assert.equal((await statuses()).p0, 'pending'); // a de UID segue intacta
+  });
+
+  it('corrida cancelMany × recebimento parcial na mesma parcela (10×): nunca "cancelada com recebimento"', async () => {
+    await repeat(async () => {
+      const [p0, p1] = await world({ n: 2, each: 10000 });
+      const rs = await Promise.all([call(UID, 'debt.cancelMany', opId(), { debtIds: [p0, p1] }), call(UID, 'debt.receive', opId(), recv(p0, 4000))]);
+      const s = await state();
+      const cancelled = s.debts.filter((d) => d.status === 'cancelled').map((d) => d.id);
+      assert.ok(!(cancelled.includes(p0) && s.payments.length > 0), JSON.stringify({ rs, debts: s.debts, payments: s.payments }));
+      assert.equal(rs.filter((r) => r.status === 200).length, 1, JSON.stringify(rs)); // exatamente um dos dois vence
+      assert.ok(cancelled.length === 0 || cancelled.length === 2, 'tudo ou nada');
+    });
   });
 });

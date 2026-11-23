@@ -10,7 +10,7 @@ import {
   formatDate, formatMonth, formatCentsInput, selectOptions, todayIso,
 } from '../components/form-kit.js';
 import {
-  listDebts, listDebtPayments, createDebtPlan, cancelDebt, cancelDebtGroup, settleDebts, settleInstallment, settleMonthInstallments,
+  listDebts, listDebtPayments, createDebtPlan, cancelDebt, cancelDebts, settleDebts, settleInstallment, settleMonthInstallments,
   previewMonthSettlement, newOperationId, formatCents,
 } from '../services/debtPayments.js';
 import { debtorPendingCents, debtorObligations, receivedByInstallment, accountLabel } from '../core/model.js';
@@ -30,6 +30,10 @@ export function displayDebtStatus(debt, today = todayIso()) {
 /**
  * @param {{ user: {uid:string}, debtor: object, onChange: () => Promise<void> }} ctx
  */
+// Parcelas marcadas para cancelamento múltiplo. Fica no módulo (e não na janela) para sobreviver à troca do filtro de
+// mês, que reabre a janela; é zerada ao abrir OUTRO devedor e após cancelar. Só ids ainda elegíveis valem na confirmação.
+const cancelSelection = { debtorId: null, ids: new Set() };
+
 export async function openDebtorInstallments(args) {
   // Falha de carga (rede, indisponibilidade…) vira aviso explícito, nunca uma ação "morta" sem retorno.
   try { return await openDebtorInstallmentsInner(args); } catch (error) {
@@ -209,9 +213,51 @@ async function openDebtorInstallmentsInner({ user, debtor, onChange, month = 'al
     return el('span', { class: `badge badge--${status === 'paid' ? 'success' : status === 'late' ? 'danger' : status === 'partial' ? 'warning' : 'neutral'}`, 'data-status': status, text: `${mark}${STATUS_LABELS[status] ?? status}${extra}` });
   };
 
+  // Cancelamento múltiplo: elegíveis = parcelas de dívida pendentes/atrasadas SEM recebimentos (o servidor revalida).
+  if (cancelSelection.debtorId !== debtor.id) { cancelSelection.debtorId = debtor.id; cancelSelection.ids.clear(); }
+  const cancelable = new Set(isOpen && !limited
+    ? debts.filter((d) => ['pending', 'late'].includes(d.status) && !(receivedBy.get(d.id) > 0)).map((d) => d.id) : []);
+  for (const id of [...cancelSelection.ids]) if (!cancelable.has(id)) cancelSelection.ids.delete(id);
+  const visibleCancelable = visible.filter((i) => i.source === 'debt' && cancelable.has(i.id));
+  const selectedDebts = () => debts.filter((d) => cancelSelection.ids.has(d.id));
+  const selCount = el('span', { id: 'cancel-selected-count', role: 'status' });
+  const selButton = el('button', { type: 'button', class: 'btn btn--danger', id: 'cancel-selected', onClick: () => openCancelSelected(), text: 'Cancelar selecionadas' });
+  const syncSelection = () => {
+    const n = cancelSelection.ids.size;
+    selCount.textContent = n ? `${n} parcela(s) selecionada(s) · ${formatCents(selectedDebts().reduce((t, d) => t + (Number(d.principalCents) || 0), 0))}` : 'Nenhuma parcela selecionada';
+    selButton.disabled = n === 0;
+  };
+  const openCancelSelected = () => {
+    const chosen = selectedDebts();
+    if (!chosen.length) return;
+    confirmModal({
+      title: 'Cancelar parcelas selecionadas',
+      message: `Cancelar ${chosen.length} parcela(s) selecionada(s) de ${debtor.name}?`,
+      hint: 'Operação única: se alguma parcela não puder ser cancelada (ex.: recebeu um pagamento), nenhuma é alterada.',
+      confirmLabel: `Cancelar ${chosen.length} parcela(s)`,
+      onConfirm: async () => {
+        const r = await cancelDebts(user.uid, chosen.map((d) => d.id));
+        if (r.ok) { cancelSelection.ids.clear(); toast(`${r.count} parcela(s) cancelada(s).`); await refresh(); } else { toast(r.errors._form, 7000); reopen(); }
+      },
+    });
+  };
+  const selectionBar = visibleCancelable.length
+    ? el('div', { class: 'toolbar', id: 'cancel-selection-bar' }, [
+      el('button', { type: 'button', class: 'btn btn--secondary', id: 'select-all-cancelable', text: `Selecionar todas as pendentes ${listAll ? 'de todos os meses' : `de ${formatMonth(month)}`} (${visibleCancelable.length})`,
+        onClick: () => { for (const i of visibleCancelable) cancelSelection.ids.add(i.id); reopen(); } }),
+      el('button', { type: 'button', class: 'btn btn--secondary', id: 'clear-selection', text: 'Limpar seleção', onClick: () => { cancelSelection.ids.clear(); reopen(); } }),
+      selCount, selButton,
+    ])
+    : null;
+  syncSelection();
+
   const table = visible.length
     ? dataTable({
       columns: [
+        ...(visibleCancelable.length ? [{ key: 'id', label: 'Sel.', render: (_, i) => (i.source === 'debt' && cancelable.has(i.id)
+          ? el('input', { type: 'checkbox', class: 'cancel-pick', 'aria-label': `Selecionar parcela ${i.installmentNumber} de ${i.description}`, checked: cancelSelection.ids.has(i.id),
+            onChange: (e) => { if (e.target.checked) cancelSelection.ids.add(i.id); else cancelSelection.ids.delete(i.id); syncSelection(); } })
+          : '') }] : []),
         { key: 'kind', label: 'Tipo', render: (v) => KIND_LABELS[v] ?? v },
         { key: 'description', label: 'Dívida', render: (v, i) => (i.cardName ? `${v} · ${i.cardName}` : v) },
         { key: 'installmentNumber', label: 'Parcela', render: (v, i) => (i.installmentsTotal ? `${v}/${i.installmentsTotal}` : String(v)) },
@@ -246,8 +292,8 @@ async function openDebtorInstallmentsInner({ user, debtor, onChange, month = 'al
               hint: kept ? `${kept} parcela(s) com recebimento serão mantidas: estorne o recebimento para poder cancelá-las. Parcelas já pagas não mudam.` : 'Parcelas já pagas não mudam.',
               confirmLabel: 'Cancelar dívida',
               onConfirm: async () => {
-                const r = await cancelDebtGroup(user.uid, cancellable.map((d) => d.id));
-                if (r.ok) { toast(`Dívida cancelada (${r.count} parcela(s)).`); await refresh(); } else { toast(r.errors._form, 7000); if (r.partial) await refresh(); else reopen(); }
+                const r = await cancelDebts(user.uid, cancellable.map((d) => d.id));
+                if (r.ok) { toast(`Dívida cancelada (${r.count} parcela(s)).`); await refresh(); } else { toast(r.errors._form, 7000); reopen(); }
               },
             }), 'btn--danger'));
           }
@@ -326,6 +372,7 @@ async function openDebtorInstallmentsInner({ user, debtor, onChange, month = 'al
       canAddDebt ? el('button', { type: 'button', class: 'btn btn--primary', onClick: openCreate, text: 'Nova dívida' }) : null,
       !limited && isOpen && debts.some((d) => ['pending', 'late'].includes(d.status))
         ? el('button', { type: 'button', class: 'btn btn--secondary', onClick: () => openSettle(null, `todas as dívidas de ${debtor.name}`), text: 'Quitar todas as dívidas' }) : null,
+      selectionBar,
       table,
       paymentsTable ? el('h3', { text: 'Recebimentos' }) : null,
       paymentsTable,
