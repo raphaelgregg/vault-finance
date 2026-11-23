@@ -4,7 +4,7 @@
  * os escopos "usuário específico" e "banco inteiro" só aparecem com a claim `admin === true`. Toda ação destrutiva
  * exige confirmação digitada.
  */
-import { el, $, toast, refreshIcons } from '../core/ui.js';
+import { el, $, toast, refreshIcons } from '../components/dom.js';
 import { field, mount, emptyBlock } from '../components/form-kit.js';
 import { canAccessMaintenance, CONFIRM_PHRASES } from '../utils/maintenance-config.js';
 import { setAdminClaim, parseAdminTarget, listAdminUsers, buildAdminUserRows } from '../services/adminClaims.js';

@@ -32,8 +32,9 @@ em metas, recebimentos de devedores, estornos) são processadas por uma **funç�
 | Cartões, compras parceladas e faturas | ✅ limite derivado; fechar/pagar fatura (ver limitações) |
 | Orçamentos por categoria/mês | ✅ gasto derivado das despesas do mês |
 | Dashboard e relatórios (período, categorias, CSV) | ✅ somente leitura, leituras limitadas |
-| Security Rules + testes no emulador | ✅ 65 testes |
-| Testes unitários (modelo + services) | ✅ 340 testes |
+| Security Rules + testes no emulador | ✅ 112 testes |
+| Testes unitários (modelo + services) | ✅ 645 testes |
+| Testes de integração (camada confiável, Emulator) | ✅ 122 testes |
 | Lint sem dependências, CI (GitHub Actions), E2E Playwright | ✅ ver seção 3 (CI e E2E não executados no GitHub) |
 
 **Nada é inventado na tela:** com o banco vazio, indicadores mostram zeros/`—` e as listas exibem
@@ -44,8 +45,8 @@ fatura aberta são **derivados**, nunca gravados.
 
 ## 2. Pré-requisitos
 
-- Node.js 18+ (só para o emulador e testes; a aplicação não precisa de build). Testes executados
-  no Node 22; o Node 18 só roda no CI (matriz) — não foi executado localmente.
+- Node.js 22+ (LTS; só para o emulador e testes; a aplicação não precisa de build). Testes executados
+  localmente no Node 22; o CI roda 22 e 24. Node 18 não é suportado (fim de vida; sem `crypto` global em ESM).
 - Java 11+ (emulador do Firestore, usado por `npm run test:rules`).
 - Java 11+ (exigido pelo emulador do Firestore).
 - Conta Google para criar o projeto no Firebase (plano **Spark**, gratuito).
@@ -91,6 +92,20 @@ npx firebase deploy --only firestore:rules,firestore:indexes \
 > (`Missing or insufficient permissions`). A aplicação só persiste dados depois de
 > publicar `firestore.rules`.
 
+#### Sintoma: "leitura negada pelas regras publicadas" (Dashboard, Bancos, Transferências, Devedores, Metas)
+
+Significa que as Rules **publicadas** no Firebase são anteriores à VF-ARQ-02 e não têm `match /users/{userId}/reversals/{reversalId}`
+(leitura do dono). Sem ela, o navegador não consegue ler estornos e, **de propósito**, não exibe saldo, fechamento nem guardado de metas
+(estorno pode existir sem que o app consiga vê-lo). O `firestore.rules` do repositório já contém a regra; falta publicar.
+
+1. Publicar (autorização do dono do projeto): os comandos acima (`firestore:rules,firestore:indexes`). Ordem segura: **Rules primeiro**, depois
+   a função de servidor (`/api/finance`) — o inverso cria estornos que o navegador ainda não lê.
+2. Alternativa pelo Console: Firebase Console → Firestore Database → **Regras** → colar o conteúdo de `firestore.rules` → **Publicar**.
+3. Conferir: Console → Firestore → Regras mostra a data/hora da publicação e o texto contendo `reversals`. Depois, recarregue as telas
+   (Ctrl+F5) e confira que os avisos sumiram.
+4. Reproduzir o sintoma localmente sem tocar em produção: `node tests/e2e/all-pages.mjs` (roda todas as telas com as Rules do repositório e
+   com as Rules antigas de `tests/fixtures/firestore.rules.legacy`).
+
 ### Rodar localmente
 
 ```bash
@@ -107,17 +122,17 @@ Firebase real.
 
 | Comando | O que faz |
 |---|---|
-| `npm run test:unit` | modelo, agregações e services com `io` injetado (sem rede) — 340 testes |
-| `npm run test:rules` | sobe Auth+Firestore no emulador e roda `tests/rules/` — 65 testes |
+| `npm run test:unit` | modelo, agregações e services com `io` injetado (sem rede) — 645 testes |
+| `npm run test:rules` | sobe Auth+Firestore no emulador e roda `tests/rules/` — 112 testes |
 | `npm run lint` | sintaxe, espaços, `console.log`, imports não usados, JSON (sem dependências) |
-| `npm run test:integration` | integração com o Firestore Emulator, sem mocks de transação: camada confiável (`server-*.test.mjs`: transferências, recebimentos, lote retomável, despesas/receitas/faturas/metas, estornos, contas/devedores arquivados, segurança com ID tokens reais), services → servidor (`service-bridge`), consistência de saldos/dashboard/previsão contra oráculo independente — `tests/integration/` |
+| `npm run test:integration` | integração com o Firestore Emulator, sem mocks de transação: camada confiável (`server-*.test.mjs`: transferências, recebimentos, lote retomável, despesas/receitas/faturas/metas, estornos, contas/devedores arquivados, segurança com ID tokens reais), services → servidor (`service-bridge`), consistência de saldos/dashboard/previsão contra oráculo independente, leitura de estornos (`reversals-visibility`) — `tests/integration/` — 122 testes |
 | `npm run serve:api` | servidor local: estático + `POST /api/finance` (mesmo handler da Vercel) contra os emuladores — `scripts/dev-server.mjs` |
-| `npm run test:e2e` | Playwright em Chromium contra os emuladores: `flows.mjs` (cadastro, orçamentos, metas, cartões, devedores, dashboard, relatórios, configurações) e `movements.mjs` (bancos, receitas, despesas, transferências: CRUD, filtros, paginação, ordenação, saldo derivado) |
+| `npm run test:e2e` | Playwright em Chromium contra os emuladores: `flows.mjs` (cadastro, orçamentos, metas, cartões, devedores, dashboard, relatórios, configurações) e `movements.mjs` (bancos, receitas, despesas, transferências: CRUD, filtros, paginação, ordenação, saldo derivado), além de `debtors`, `maintenance`, `maintenance-inventory` (inventário de controles de Manutenção: 41 comuns / 64 admin), `validation-center`, `auth`, `csv`, `reversals-visibility` (transferências/devedores/metas com leitura de estornos negada ou offline) e `balances-reversals` (Bancos e Dashboard: saldo nunca exibido sem a leitura dos estornos) |
 
 O E2E **não** adiciona dependência ao projeto: usa o `playwright` já instalado no ambiente e, sem
 ele, sai com aviso. O harness serve o SDK do Firebase a partir de `node_modules` (a CDN pode estar
 bloqueada) e remove o SRI do import map só durante o teste. `E2E_SCREENSHOTS=<pasta>` salva capturas.
-O workflow `.github/workflows/ci.yml` roda lint, unit e Rules (Node 18 e 22); E2E fica fora do CI.
+O workflow `.github/workflows/ci.yml` roda lint, unit e Rules (Node 22 e 24, LTS); E2E fica fora do CI.
 
 ---
 
@@ -135,13 +150,16 @@ O workflow `.github/workflows/ci.yml` roda lint, unit e Rules (Node 18 e 22); E2
 ├── js/
 │   ├── app.js                  # entrada das páginas internas
 │   ├── auth-page.js            # entrada da tela de login
-│   ├── core/                   # guard.js (sessão), ui.js (DOM, toast), model.js (schemas/cálculos), aggregates.js (orçamento/dashboard/relatórios)
+│   ├── core/                   # domínio PURO (sem DOM/rede): model.js (barrel) + model/ (schemas, validation, ledger, subscriptions, debtors, goals, cards), aggregates.js, forecast.js, integrity.js, importSchema.js; guard.js (sessão)
 │   ├── firebase/               # config.js (placeholders), client.js (SDK + emuladores)
 │   ├── services/               # firestore.js (CRUD, lote atômico, auditoria) + um service por módulo
-│   ├── components/             # sidebar, topbar, tema, card, tabela, modal, vazio, form-kit (módulos de formulário)
+│   ├── components/             # dom.js (el/$/toast), sidebar, topbar, tema, card, tabela, modal, vazio, form-kit (formulários)
 │   ├── modules/                # um módulo por página (+ devedores-parcelas.js)
-│   └── utils/                  # constants, money (centavos), dates, nav
-├── tests/                      # model/, services/ (unit), rules/ (emulador), e2e/ (Playwright)
+│   └── utils/                  # constants, money (centavos: parse/format), dates, csv, zip, nav… (puros)
+├── api/                        # funções Vercel (finance, validation, admin-claims): só adaptam req/res
+├── server/                     # lógica de servidor (Admin SDK): finance/, validation/, admin/
+├── tests/                      # model/, services/ (unit), rules/, integration/ (emulador), e2e/ (Playwright)
+├── docs/ARCHITECTURE.md        # camadas, regras de dependência e contratos
 ├── scripts/lint.mjs            # lint sem dependências
 ├── .github/workflows/ci.yml    # CI (lint, unit, Rules)
 ├── firestore.rules
@@ -152,7 +170,8 @@ O workflow `.github/workflows/ci.yml` roda lint, unit e Rules (Node 18 e 22); E2
 ```
 
 Separação de responsabilidades: **páginas** só montam o shell; **módulos** renderizam;
-**services** falam com o Firebase; **utils** não conhecem DOM nem rede.
+**services** falam com o Firebase; **utils** e **core** não conhecem DOM nem rede.
+Detalhes, regras de dependência e contratos: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ---
 
@@ -217,6 +236,13 @@ isolamento nas Rules.
   transação). Não há atomicidade global: consistência por parcela + estado explícito (`completed`/`partial_failed`).
 - **Rules:** o navegador só lê os próprios dados e grava o que não move saldo; escritas protegidas são negadas (testes em
   `tests/rules`). Contas e devedores com histórico são **arquivados** (nunca apagados fisicamente).
+- **Leitura de estornos nunca presumida (VF-COR-01/02):** o servidor pode criar estornos que o navegador ainda não consegue ler
+  (Rules publicadas sem a coleção `reversals`). `permission-denied` ou falha de conexão significam **desconhecido**, nunca
+  "sem estornos" (`js/utils/reversalsAccess.js`: modo estrito por padrão; modo limitado só onde sinalizado na tela).
+  **Bancos** e **Dashboard** não exibem saldo, resultado nem previsão sem a leitura completa: mostram "—", um aviso explícito
+  (leitura negada × erro de conexão) e "Tentar novamente"; um saldo anterior não permanece na tela após falha de recálculo.
+  O "Saldo total" de Bancos é só o derivado das movimentações (nunca a soma dos saldos de abertura).
+  **Publique as Rules (`firestore.rules`) antes/junto da função de servidor**, senão essas telas ficam indisponíveis.
 - **Desenvolvimento local:** `npm run emulators` + `npm run serve:api` (estático + `/api/finance` contra os emuladores,
   sem credencial). `npm run serve` (somente estático) não tem a API.
 
@@ -233,7 +259,7 @@ isolamento nas Rules.
 ### Administradores (claim `admin`) e a função de servidor
 
 - Administrador = custom claim de token `admin == true`. **O cliente nunca grava claims**: só a função da Vercel
-  `POST /api/admin-claims` (`api/admin-claims.mjs` → `server/adminClaims.mjs`) altera, e só a pedido de quem já é
+  `POST /api/admin-claims` (`api/admin-claims.mjs` → `server/admin/claims.mjs`) altera, e só a pedido de quem já é
   administrador (validado no servidor pelo estado atual da conta, não só pelo token). Sem dependências: usa a API
   administrativa do Identity Toolkit com uma service account.
 - Configuração (uma vez, fora do repositório): na Vercel → Settings → Environment Variables, crie

@@ -5,7 +5,7 @@
  * - Validação client-side espelhando Security Rules
  * - Persistência em users/{uid}/accounts
  */
-import { el, $, toast, refreshIcons } from '../core/ui.js';
+import { el, $, toast, refreshIcons } from '../components/dom.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { createStatCard } from '../components/stat-card.js';
 import { formatCentsInput, clearErrors, showFormErrors as showErrors } from '../components/form-kit.js';

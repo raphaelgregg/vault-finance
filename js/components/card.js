@@ -1,5 +1,5 @@
 /** Card de indicador (sem cálculo nesta fase — valores são "—"). */
-import { el } from '../core/ui.js';
+import { el } from './dom.js';
 
 export function createCard({ label, value = '—', hint, icon = 'circle', tone }) {
   const valueClass = tone ? `card__value card__value--${tone}` : 'card__value';

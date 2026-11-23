@@ -2,7 +2,7 @@
  * Metas — VF-2-03c (UI). Valor guardado, progresso e restante são derivados das movimentações
  * (aportes − resgates); só o alvo/prazo/status da meta são gravados. Aportar/resgatar é atômico.
  */
-import { el, toast, refreshIcons } from '../core/ui.js';
+import { el, toast, refreshIcons } from '../components/dom.js';
 import {
   field, iconButton, statCard, panelHeader, emptyBlock, dataTable, progressBar,
   confirmModal, formModal, formatCentsInput, formatDate, optionLabel, selectOptions, todayIso,
@@ -16,6 +16,7 @@ import { listAccounts } from '../services/accounts.js';
 import { accountLabel as accountText } from '../core/model.js';
 import { loadBalances } from '../services/balances.js';
 import { describeError } from '../utils/errors.js';
+import { reversalsUnavailable, loadErrorMessage } from '../utils/reversalsAccess.js';
 import { newOperationId } from '../services/financeApi.js';
 
 export const meta = { title: 'Metas', icon: 'target' };
@@ -27,24 +28,35 @@ let saved = new Map();
 let accounts = [];
 let linkedIds = new Set(); // metas em modo "conta vinculada" (progresso = saldo da conta)
 let balancesNotice = null;
+// Estornos ilegíveis (Rules publicadas sem `reversals`): o guardado das metas é DESCONHECIDO — nunca "0" nem suposto (VF-COR-03).
+let limited = false;
 
 export async function render(target, ctx) {
   user = ctx.user;
   container = target;
-  accounts = await listAccounts(user.uid);
-  await reload();
+  try {
+    accounts = await listAccounts(user.uid);
+    await reload();
+  } catch (error) { // o app não aguarda `render`: sem isto, qualquer falha de leitura deixava a tela EM BRANCO
+    console.error('[metas] falha ao carregar', error);
+    container.replaceChildren(el('div', { class: 'notice', role: 'alert', id: 'goals-load-error' }, [
+      el('span', { text: `Não foi possível carregar as metas: ${loadErrorMessage(error, describeError)} ` }),
+      el('button', { type: 'button', class: 'btn btn--secondary', id: 'retry-goals', onClick: () => render(target, ctx), text: 'Tentar novamente' }),
+    ]));
+  }
 }
 
 async function reload() {
   goals = await listGoals(user.uid);
-  const txs = await Promise.all(goals.map(async (g) => [g.id, await listGoalTransactions(user.uid, g.id)]));
-  saved = new Map(txs.map(([id, list]) => [id, goalSavedCents(list)]));
+  const txs = await Promise.all(goals.map(async (g) => [g.id, await listGoalTransactions(user.uid, g.id, { tolerateReversalsDenied: true })]));
+  limited = txs.some(([, list]) => reversalsUnavailable(list));
+  saved = new Map(limited ? [] : txs.map(([id, list]) => [id, goalSavedCents(list)]));
   const txCounts = new Map(txs.map(([id, list]) => [id, list.length]));
   // Metas vinculadas a conta: progresso = saldo derivado da conta (alimentado por transferências), repartido
   // entre as metas da mesma conta sem repetir valor. Falha de leitura é isolada: aviso explícito, resto segue.
   linkedIds = new Set(goals.filter((g) => g.status !== 'cancelled' && isAccountLinkedGoal(g, txCounts.get(g.id))).map((g) => g.id));
   balancesNotice = null;
-  if (linkedIds.size) {
+  if (linkedIds.size && !limited) {
     try {
       const { balances } = await loadBalances(user.uid, accounts);
       for (const [id, cents] of allocateLinkedGoalBalances(goals, balances, txCounts)) saved.set(id, cents);
@@ -61,6 +73,7 @@ const accountLabel = (id) => {
   return a ? accountText(a) : '—';
 };
 const savedOf = (g) => saved.get(g.id) ?? 0;
+const showSaved = (g) => (limited ? '—' : formatCents(savedOf(g)));
 
 function renderPage() {
   const live = goals.filter((g) => g.status !== 'cancelled');
@@ -70,7 +83,7 @@ function renderPage() {
     actionLabel: 'Nova meta', onAction: () => openGoalModal(),
   });
   const stats = el('div', { class: 'grid grid--cards' }, [
-    statCard('Total acumulado', formatCents(total), 'piggy-bank', 'Aportes − resgates, ou saldo da conta vinculada (metas não canceladas)'),
+    statCard('Total acumulado', limited ? '—' : formatCents(total), 'piggy-bank', 'Aportes − resgates, ou saldo da conta vinculada (metas não canceladas)'),
     statCard('Metas ativas', String(goals.filter((g) => g.status === 'active').length), 'target', 'Em andamento'),
     statCard('Concluídas', String(goals.filter((g) => g.status === 'completed').length), 'check-circle-2', 'Alvo atingido'),
   ]);
@@ -79,9 +92,9 @@ function renderPage() {
       columns: [
         { key: 'name', label: 'Meta', render: (v, g) => (linkedIds.has(g.id) ? `${v} · saldo de ${accountLabel(g.accountId)}` : v) },
         { key: 'targetCents', label: 'Objetivo', numeric: true, render: (v) => formatCents(v) },
-        { key: 'saved', label: 'Acumulado', numeric: true, render: (_, g) => formatCents(savedOf(g)) },
-        { key: 'progress', label: 'Progresso', render: (_, g) => progressBar(goalProgressPercent(savedOf(g), g.targetCents), 'ok', `Progresso de ${g.name}`) },
-        { key: 'percent', label: '%', numeric: true, render: (_, g) => `${goalProgressPercent(savedOf(g), g.targetCents)}%` },
+        { key: 'saved', label: 'Acumulado', numeric: true, render: (_, g) => showSaved(g) },
+        { key: 'progress', label: 'Progresso', render: (_, g) => (limited ? '—' : progressBar(goalProgressPercent(savedOf(g), g.targetCents), 'ok', `Progresso de ${g.name}`)) },
+        { key: 'percent', label: '%', numeric: true, render: (_, g) => (limited ? '—' : `${goalProgressPercent(savedOf(g), g.targetCents)}%`) },
         { key: 'deadline', label: 'Prazo', render: (v) => formatDate(v) },
         { key: 'status', label: 'Status', render: (v) => optionLabel(getGoalStatusOptions(), v) },
       ],
@@ -89,9 +102,12 @@ function renderPage() {
       actions: goalActions,
     })
     : emptyBlock('target', 'Nenhuma meta criada', 'Crie reserva de emergência, viagem ou qualquer objetivo e acompanhe o progresso.');
+  const limitedNotice = limited
+    ? el('p', { class: 'notice', role: 'alert', id: 'goals-reversals-unavailable', text: 'Limitação: não foi possível ler os estornos (as regras de acesso publicadas ainda não incluem essa coleção). Valor guardado, progresso, aportes e resgates ficam indisponíveis por não serem confiáveis; criar, cancelar e excluir metas continuam disponíveis.' })
+    : null;
   const notice = balancesNotice ? el('p', { class: 'notice', role: 'alert', text: balancesNotice }) : null;
   // `replaceChildren(null)` renderiza o TEXTO "null": só nós reais entram (bug da VF-2-03o).
-  container.replaceChildren(...[header, notice, stats, el('section', { class: 'panel' }, [
+  container.replaceChildren(...[header, limitedNotice, notice, stats, el('section', { class: 'panel' }, [
     el('div', { class: 'panel__header' }, [el('h2', { text: 'Minhas metas' })]),
     el('div', { class: 'panel__body panel__body--flush' }, [table]),
   ])].filter(Boolean));
@@ -100,15 +116,15 @@ function renderPage() {
 
 function goalActions(goal) {
   const acts = [];
-  if (goal.status === 'active' && !linkedIds.has(goal.id)) acts.push(iconButton(`Aportar em ${goal.name}`, 'plus-circle', () => openMovementModal(goal, 'deposit'), 'btn--success'));
-  if ((goal.status === 'active' || goal.status === 'completed') && savedOf(goal) > 0 && !linkedIds.has(goal.id)) {
+  if (goal.status === 'active' && !limited && !linkedIds.has(goal.id)) acts.push(iconButton(`Aportar em ${goal.name}`, 'plus-circle', () => openMovementModal(goal, 'deposit'), 'btn--success'));
+  if ((goal.status === 'active' || goal.status === 'completed') && savedOf(goal) > 0 && !limited && !linkedIds.has(goal.id)) {
     acts.push(iconButton(`Resgatar de ${goal.name}`, 'minus-circle', () => openMovementModal(goal, 'withdraw')));
   }
-  if (goal.status === 'active') acts.push(iconButton(`Editar ${goal.name}`, 'edit-2', () => openGoalModal(goal)));
+  if (goal.status === 'active' && !limited) acts.push(iconButton(`Editar ${goal.name}`, 'edit-2', () => openGoalModal(goal)));
   if (goal.status === 'active') {
     acts.push(iconButton(`Cancelar ${goal.name}`, 'x-circle', () => changeStatus(goal, cancelGoal, 'Meta cancelada.'), 'btn--danger'));
   }
-  if (goal.status === 'cancelled') acts.push(iconButton(`Reabrir ${goal.name}`, 'rotate-ccw', () => changeStatus(goal, reopenGoal, 'Meta reaberta.'), 'btn--success'));
+  if (goal.status === 'cancelled' && !limited) acts.push(iconButton(`Reabrir ${goal.name}`, 'rotate-ccw', () => changeStatus(goal, reopenGoal, 'Meta reaberta.'), 'btn--success'));
   acts.push(iconButton(`Excluir ${goal.name}`, 'trash-2', () => confirmModal({
     title: 'Excluir meta', message: `Excluir "${goal.name}"?`,
     hint: 'Só é possível sem movimentações; para manter o histórico, cancele.', confirmLabel: 'Excluir',

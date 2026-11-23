@@ -3,7 +3,7 @@
  * "Atrasada" é exibição derivada (pendente com vencimento passado); o status gravado só muda via
  * recebimento (paid) ou cancelamento. Registrar recebimento é atômico (js/services/debtPayments.js).
  */
-import { el, toast, refreshIcons } from '../core/ui.js';
+import { el, toast, refreshIcons } from '../components/dom.js';
 import { openModal, closeModal } from '../components/modal.js';
 import {
   field, iconButton, emptyBlock, dataTable, formModal, confirmModal,

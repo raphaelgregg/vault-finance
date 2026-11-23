@@ -2,7 +2,7 @@
  * Configurações: perfil (profile/main) e tema (settings/main), persistidos por usuário.
  * O módulo só monta a UI; leitura/escrita/validação ficam em services/preferences.js.
  */
-import { el, toast, refreshIcons } from '../core/ui.js';
+import { el, toast, refreshIcons } from '../components/dom.js';
 import { applyThemePreference } from '../components/theme.js';
 import { changePassword, sendResetToCurrentUser } from '../services/auth.js';
 import { hasPasswordProvider, externalProviderLabels, MIN_PASSWORD_LENGTH } from '../utils/password.js';

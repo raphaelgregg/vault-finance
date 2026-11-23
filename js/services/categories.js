@@ -162,3 +162,9 @@ export const CATEGORY_KINDS = Object.freeze([
 export function getCategoryKindOptions() {
   return CATEGORY_KINDS;
 }
+
+/** Rótulo de exibição "Nome (Tipo)" — fonte única para selects e listas de receitas, despesas e assinaturas. */
+export function categoryLabel(category) {
+  const kind = getCategoryKindOptions().find((o) => o.value === category.kind)?.label;
+  return kind ? `${category.name} (${kind})` : category.name;
+}

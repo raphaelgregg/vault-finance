@@ -1,6 +1,6 @@
 /** Menu lateral recolhível com Lucide. Colapsa em desktop, gaveta no mobile. */
 import { NAV_ITEMS } from '../utils/nav.js';
-import { el, refreshIcons } from '../core/ui.js';
+import { el, refreshIcons } from './dom.js';
 
 const COLLAPSE_KEY = 'pf:sidebar-collapsed';
 

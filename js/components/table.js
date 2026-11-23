@@ -2,7 +2,7 @@
  * Tabela genérica com estado vazio informativo.
  * columns: [{ key, label, numeric }], rows: [{ id, ... }]
  */
-import { el } from '../core/ui.js';
+import { el } from './dom.js';
 
 export function createTable({ columns, rows = [], emptyTitle, emptyText, emptyIcon = 'inbox' }) {
   if (!rows.length) {

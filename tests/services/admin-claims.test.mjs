@@ -8,7 +8,7 @@ import { generateKeyPairSync, createSign, createVerify } from 'node:crypto';
 import {
   handleAdminClaims, signServiceAccountJwt, readServiceAccount, parseServiceAccount, normalizePrivateKey,
   verifyFirebaseIdToken, resetAdminClaimsCache,
-} from '../../server/adminClaims.mjs';
+} from '../../server/admin/claims.mjs';
 import { setAdminClaim, parseAdminTarget, listAdminUsers, buildAdminUserRows, ADMIN_CLAIMS_ENDPOINT } from '../../js/services/adminClaims.js';
 
 const PROJECT = 'proj';
