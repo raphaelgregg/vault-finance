@@ -6,7 +6,7 @@
  * - Validação client-side espelhando Security Rules
  * - Persistência em users/{uid}/incomes
  */
-import { el, $, toast, refreshIcons } from '../core/ui.js';
+import { el, $, toast, refreshIcons } from '../components/dom.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { createStatCard } from '../components/stat-card.js';
 import { formatCentsInput, formatDate, clearErrors, showFormErrors as showErrors } from '../components/form-kit.js';
@@ -25,7 +25,7 @@ import {
 } from '../services/incomes.js';
 import { createPager } from '../services/pager.js';
 import { createPagerFooter } from '../components/pager-footer.js';
-import { listCategories, getCategoryKindOptions } from '../services/categories.js';
+import { listCategories, categoryLabel } from '../services/categories.js';
 import { listAccounts } from '../services/accounts.js';
 
 import { todayInAppZone, currentMonthKey } from '../utils/dates.js';
@@ -614,11 +614,6 @@ function getCategoryLabel(categoryId) {
 }
 
 /** Rótulo da opção no select: nome + tipo (Receita/Despesa/Ambos). */
-function categoryLabel(category) {
-  const kind = getCategoryKindOptions().find((o) => o.value === category.kind)?.label;
-  return kind ? `${category.name} (${kind})` : category.name;
-}
-
 function getStatusLabel(value) {
   const statuses = getIncomeStatusOptions();
   const found = statuses.find((s) => s.value === value);

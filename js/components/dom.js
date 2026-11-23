@@ -1,4 +1,4 @@
-/** Helpers mínimos de DOM e feedback visual. */
+/** Helpers mínimos de DOM e feedback visual (el, $, $$, toast, refreshIcons). Único lugar de js/ fora dos módulos que cria nós. */
 export const $ = (selector, scope = document) => scope.querySelector(selector);
 export const $$ = (selector, scope = document) => Array.from(scope.querySelectorAll(selector));
 
@@ -36,9 +36,4 @@ export function refreshIcons() {
   if (window.lucide && typeof window.lucide.createIcons === 'function') {
     window.lucide.createIcons();
   }
-}
-
-/** Mensagem para funcionalidade ainda não disponível (sem botão morto). */
-export function notImplementedYet() {
-  toast('Funcionalidade ainda não disponível — nada foi gravado.');
 }

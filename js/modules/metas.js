@@ -2,7 +2,7 @@
  * Metas — VF-2-03c (UI). Valor guardado, progresso e restante são derivados das movimentações
  * (aportes − resgates); só o alvo/prazo/status da meta são gravados. Aportar/resgatar é atômico.
  */
-import { el, toast, refreshIcons } from '../core/ui.js';
+import { el, toast, refreshIcons } from '../components/dom.js';
 import {
   field, iconButton, statCard, panelHeader, emptyBlock, dataTable, progressBar,
   confirmModal, formModal, formatCentsInput, formatDate, optionLabel, selectOptions, todayIso,

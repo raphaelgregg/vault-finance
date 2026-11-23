@@ -2,7 +2,7 @@
  * Rodapé de paginação (VF-4-03): aviso de truncamento + botão "Carregar mais antigas".
  * Devolve null quando não há mais páginas (o chamador filtra nulos).
  */
-import { el } from '../core/ui.js';
+import { el } from './dom.js';
 
 /**
  * @param {{ pager: { items: any[], hasMore: boolean }, noun: string, onLoadMore: () => Promise<void> }} opts

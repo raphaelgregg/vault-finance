@@ -7,7 +7,7 @@ import { configMissing } from './firebase/client.js';
 import { connectEmulatorsOnce } from './firebase/client.js';
 import { signIn, register, resetPassword, authErrorMessage } from './services/auth.js';
 import { redirectIfAuthenticated } from './core/guard.js';
-import { toast } from './core/ui.js';
+import { toast } from './components/dom.js';
 
 applyStoredTheme();
 connectEmulatorsOnce();

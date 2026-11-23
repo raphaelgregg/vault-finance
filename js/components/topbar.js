@@ -1,5 +1,5 @@
 /** Barra superior: título, busca (placeholder sem ação), tema, perfil e logout. */
-import { el, refreshIcons, toast } from '../core/ui.js';
+import { el, refreshIcons, toast } from './dom.js';
 import { mountThemeToggle } from './theme.js';
 import { signOut } from '../services/auth.js';
 

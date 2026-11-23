@@ -5,6 +5,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   getCategoryKindOptions,
+  categoryLabel,
   CATEGORY_LINK_COLLECTIONS,
   summarizeCategoryLinks,
   buildCategoryInUseMessage,
@@ -16,6 +17,12 @@ describe('categories service — validação', () => {
     const options = getCategoryKindOptions();
     assert.equal(options.length, 3);
     assert.deepEqual(options.map((o) => o.value), ['income', 'expense', 'both']);
+  });
+
+  it('categoryLabel (fonte única de Receitas/Despesas/Assinaturas): "Nome (Tipo)" e só o nome se o tipo é desconhecido', () => {
+    const [income] = getCategoryKindOptions();
+    assert.equal(categoryLabel({ name: 'Salário', kind: 'income' }), `Salário (${income.label})`);
+    assert.equal(categoryLabel({ name: 'Outra', kind: 'desconhecido' }), 'Outra');
   });
 
   it('buildEntity aceita categoria válida', () => {

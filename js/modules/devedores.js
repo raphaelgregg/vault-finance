@@ -2,7 +2,7 @@
  * Devedores — VF-2-03b: CRUD integrado ao Firestore (users/{uid}/debtors).
  * Pendente = emprestado − recebido (derivado, nunca gravado). Parcelas e recebimentos: devedores-parcelas.js (VF-2-03b2).
  */
-import { el, $, $$, toast, refreshIcons } from '../core/ui.js';
+import { el, $, toast, refreshIcons } from '../components/dom.js';
 import { openModal, closeModal } from '../components/modal.js';
 import {
   listDebtors,
@@ -25,6 +25,7 @@ import { openDebtorInstallments } from './devedores-parcelas.js';
 
 import { todayInAppZone, currentMonthKey } from '../utils/dates.js';
 import { isPermissionDenied } from '../utils/reversalsAccess.js';
+import { clearErrors, formatCentsInput, formatDate, formatMonth, optionLabel } from '../components/form-kit.js';
 export const meta = { title: 'Devedores', icon: 'users' };
 
 let currentUser = null;
@@ -352,32 +353,6 @@ function openDebtorModal(item = null) {
 
   form.addEventListener('submit', handleSubmit);
   $('#name', form).focus();
-}
-
-function formatCentsInput(cents) {
-  const abs = Math.abs(Number(cents));
-  return `${Number(cents) < 0 ? '-' : ''}${Math.trunc(abs / 100)},${String(abs % 100).padStart(2, '0')}`;
-}
-
-function optionLabel(options, value) {
-  return options.find((o) => o.value === value)?.label ?? value ?? '—';
-}
-
-function formatDate(value) {
-  if (!value) return '—';
-  const [y, m, d] = value.split('-');
-  return `${d}/${m}/${y}`;
-}
-
-function formatMonth(value) {
-  if (!value) return '—';
-  const [y, m] = value.split('-');
-  return `${m}/${y}`;
-}
-
-function clearErrors(form) {
-  $$('.form__error', form).forEach((node) => (node.textContent = ''));
-  $$('.form__field', form).forEach((node) => node.classList.remove('form__field--error'));
 }
 
 function showErrors(form, errors) {

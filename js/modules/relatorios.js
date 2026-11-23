@@ -2,7 +2,7 @@
  * Relatórios — VF-2-03g. Período em meses (máx. 24), receitas × despesas realizadas por mês e
  * totais por categoria, com exportação CSV gerada no cliente. Somente leitura.
  */
-import { el, toast, refreshIcons } from '../core/ui.js';
+import { el, toast, refreshIcons } from '../components/dom.js';
 import {
   field, statCard, panelHeader, emptyBlock, dataTable, progressBar, formatMonth,
   mount,

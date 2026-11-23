@@ -3,7 +3,7 @@
  * Usado pelos módulos novos (orçamentos, cartões, metas, parcelas); módulos antigos
  * mantêm suas cópias locais (sem refatoração oportunista).
  */
-import { el, $, $$, toast } from '../core/ui.js';
+import { el, $, $$, toast } from './dom.js';
 import { openModal, closeModal } from './modal.js';
 import { describeError } from '../utils/errors.js';
 import { todayInAppZone } from '../utils/dates.js';

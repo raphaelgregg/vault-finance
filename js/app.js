@@ -10,7 +10,7 @@ import { requireSession } from './core/guard.js';
 import { mountSidebar } from './components/sidebar.js';
 import { mountTopbar } from './components/topbar.js';
 import { navItemById } from './utils/nav.js';
-import { $, toast, refreshIcons } from './core/ui.js';
+import { $, toast, refreshIcons } from './components/dom.js';
 
 const MODULES = {
   dashboard: () => import('./modules/dashboard.js'),

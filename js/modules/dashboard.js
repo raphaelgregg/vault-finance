@@ -2,7 +2,7 @@
  * Dashboard — VF-2-03f. Somente leitura: tudo é derivado (js/services/dashboard.js).
  * Sem dado real mostra zeros/estado vazio; nada é DEMO.
  */
-import { el, refreshIcons } from '../core/ui.js';
+import { el, refreshIcons } from '../components/dom.js';
 import { statCard, panelHeader, emptyBlock, dataTable, formatDate, formatMonth, mount } from '../components/form-kit.js';
 import { loadDashboard, formatCents, DASHBOARD_SOURCES } from '../services/dashboard.js';
 

@@ -150,13 +150,16 @@ O workflow `.github/workflows/ci.yml` roda lint, unit e Rules (Node 18 e 22); E2
 ├── js/
 │   ├── app.js                  # entrada das páginas internas
 │   ├── auth-page.js            # entrada da tela de login
-│   ├── core/                   # guard.js (sessão), ui.js (DOM, toast), model.js (schemas/cálculos), aggregates.js (orçamento/dashboard/relatórios)
+│   ├── core/                   # domínio PURO (sem DOM/rede): model.js (barrel) + model/ (schemas, validation, ledger, subscriptions, debtors, goals, cards), aggregates.js, forecast.js, integrity.js, importSchema.js; guard.js (sessão)
 │   ├── firebase/               # config.js (placeholders), client.js (SDK + emuladores)
 │   ├── services/               # firestore.js (CRUD, lote atômico, auditoria) + um service por módulo
-│   ├── components/             # sidebar, topbar, tema, card, tabela, modal, vazio, form-kit (módulos de formulário)
+│   ├── components/             # dom.js (el/$/toast), sidebar, topbar, tema, card, tabela, modal, vazio, form-kit (formulários)
 │   ├── modules/                # um módulo por página (+ devedores-parcelas.js)
-│   └── utils/                  # constants, money (centavos), dates, nav
-├── tests/                      # model/, services/ (unit), rules/ (emulador), e2e/ (Playwright)
+│   └── utils/                  # constants, money (centavos: parse/format), dates, csv, zip, nav… (puros)
+├── api/                        # funções Vercel (finance, validation, admin-claims): só adaptam req/res
+├── server/                     # lógica de servidor (Admin SDK): finance/, validation/, admin/
+├── tests/                      # model/, services/ (unit), rules/, integration/ (emulador), e2e/ (Playwright)
+├── docs/ARCHITECTURE.md        # camadas, regras de dependência e contratos
 ├── scripts/lint.mjs            # lint sem dependências
 ├── .github/workflows/ci.yml    # CI (lint, unit, Rules)
 ├── firestore.rules
@@ -167,7 +170,8 @@ O workflow `.github/workflows/ci.yml` roda lint, unit e Rules (Node 18 e 22); E2
 ```
 
 Separação de responsabilidades: **páginas** só montam o shell; **módulos** renderizam;
-**services** falam com o Firebase; **utils** não conhecem DOM nem rede.
+**services** falam com o Firebase; **utils** e **core** não conhecem DOM nem rede.
+Detalhes, regras de dependência e contratos: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ---
 
@@ -255,7 +259,7 @@ isolamento nas Rules.
 ### Administradores (claim `admin`) e a função de servidor
 
 - Administrador = custom claim de token `admin == true`. **O cliente nunca grava claims**: só a função da Vercel
-  `POST /api/admin-claims` (`api/admin-claims.mjs` → `server/adminClaims.mjs`) altera, e só a pedido de quem já é
+  `POST /api/admin-claims` (`api/admin-claims.mjs` → `server/admin/claims.mjs`) altera, e só a pedido de quem já é
   administrador (validado no servidor pelo estado atual da conta, não só pelo token). Sem dependências: usa a API
   administrativa do Identity Toolkit com uma service account.
 - Configuração (uma vez, fora do repositório): na Vercel → Settings → Environment Variables, crie

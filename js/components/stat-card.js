@@ -1,5 +1,5 @@
 /** Card de estatística dos módulos de movimentação (bancos, receitas, despesas, transferências). */
-import { el } from '../core/ui.js';
+import { el } from './dom.js';
 
 export function createStatCard(label, value, icon, tone, hint) {
   return el('article', { class: `card${tone ? ` card--${tone}` : ''}` }, [
