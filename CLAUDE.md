@@ -13,18 +13,18 @@ Este arquivo contém regras permanentes. O estado operacional vive em `PLAN.md`.
 
 ### Estrutura (primeiro nível)
 
-`index.html` (login) · `pages/` · `css/` · `js/` (`core`, `firebase`, `services`, `components`, `modules`, `utils`) · `tests/rules/` · `assets/` · `firestore.rules` · `firestore.indexes.json` · `firebase.json` · `vercel.json`
+`index.html` (login) · `pages/` · `css/` · `js/` (`core` puro com `model/`, `firebase`, `services`, `components`, `modules`, `utils`) · `api/` + `server/` (funções Vercel/Admin SDK) · `docs/ARCHITECTURE.md` (camadas e regras de dependência) · `scripts/` · `tests/` (`model`, `services`, `rules`, `integration`, `e2e`) · `assets/` · `firestore.rules` · `firestore.indexes.json` · `firebase.json` · `vercel.json`
 
 ### Comandos declarados (package.json)
 
 | Objetivo | Comando |
 |---|---|
 | Emuladores (Auth 9099, Firestore 8080, UI 4000) | `npm run emulators` |
-| Testes das Security Rules (exige Java 11+ e Node 18+) | `npm run test:rules` |
+| Testes das Security Rules (exige Java 11+ e Node 22+ — LTS) | `npm run test:rules` |
 | Servir estático em :5500 | `npm run serve` |
 | Deploy de regras/índices | `npx firebase deploy --only firestore:rules,firestore:indexes` (somente com autorização) |
 
-Não há script de lint nem de build declarados. Não invente comandos.
+Também declarados: `npm run lint`, `npm run test:unit`, `npm run test:integration`, `npm run test:e2e`, `npm run serve:api`. Não há script de build. Não invente comandos.
 
 ### Ignorar na leitura
 

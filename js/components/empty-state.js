@@ -1,5 +1,5 @@
 /** Estado vazio informativo reutilizável (sem botão sem implementação). */
-import { el } from '../core/ui.js';
+import { el } from './dom.js';
 
 export function createEmptyState({ icon = 'inbox', title, text, phase = 'Fase 3' }) {
   return el('div', { class: 'empty' }, [

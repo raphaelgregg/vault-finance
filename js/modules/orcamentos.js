@@ -2,7 +2,7 @@
  * Orçamentos — VF-2-03e. Limite por categoria/mês; gasto, restante e % são derivados
  * (despesas não canceladas pelo mês de vencimento). Só o limite é gravado.
  */
-import { el, toast, refreshIcons } from '../core/ui.js';
+import { el, toast, refreshIcons } from '../components/dom.js';
 import {
   field, iconButton, statCard, panelHeader, emptyBlock, dataTable, progressBar,
   confirmModal, formModal, formatCentsInput, formatMonth, selectOptions,

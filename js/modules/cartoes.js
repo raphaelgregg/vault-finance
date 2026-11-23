@@ -3,7 +3,7 @@
  * Limite usado/disponível e total de fatura aberta são derivados; fechar grava o total e pagar
  * marca a fatura como paga (não movimenta conta — ver js/services/creditCards.js).
  */
-import { el, toast, refreshIcons } from '../core/ui.js';
+import { el, toast, refreshIcons } from '../components/dom.js';
 import { openModal, closeModal } from '../components/modal.js';
 import {
   field,

@@ -5,7 +5,7 @@
  * - Exclusão segura: bloqueada quando há vínculos em receitas, despesas,
  *   orçamentos ou assinaturas (checagem feita no serviço).
  */
-import { el, $, toast, refreshIcons } from '../core/ui.js';
+import { el, $, toast, refreshIcons } from '../components/dom.js';
 import { openModal, closeModal } from '../components/modal.js';
 import {
   listCategories,

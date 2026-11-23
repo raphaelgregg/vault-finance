@@ -20,7 +20,7 @@
  * `Bearer owner`, sem service account.
  */
 import { createSign, createVerify, createPublicKey } from 'node:crypto';
-import { firebaseConfig } from '../js/firebase/config.js';
+import { firebaseConfig } from '../../js/firebase/config.js';
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const CERTS_URL = 'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';

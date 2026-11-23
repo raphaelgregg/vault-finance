@@ -6,7 +6,7 @@
  * - Validação client-side espelhando Security Rules (conta origem ≠ conta destino)
  * - Persistência em users/{uid}/transfers
  */
-import { el, $, toast, refreshIcons } from '../core/ui.js';
+import { el, $, toast, refreshIcons } from '../components/dom.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { createStatCard } from '../components/stat-card.js';
 import { formatCentsInput, formatDate, clearErrors, showFormErrors as showErrors } from '../components/form-kit.js';

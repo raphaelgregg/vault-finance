@@ -3,7 +3,7 @@
  * Estado e eventos próprios (não compartilha nada com os demais painéis): dois recursos — popular a conta com dados de
  * demonstração e executar a auditoria funcional automatizada — mais a remoção segura dos dados de demonstração.
  */
-import { el, toast } from '../core/ui.js';
+import { el, toast } from './dom.js';
 import { field } from './form-kit.js';
 import { callValidation, VALIDATION_CONFIRM } from '../services/validationCenter.js';
 

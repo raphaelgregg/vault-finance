@@ -9,7 +9,7 @@ import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadPlaywright, launchApp, registerUser } from './harness.mjs';
-import { handleAdminClaims } from '../../server/adminClaims.mjs';
+import { handleAdminClaims } from '../../server/admin/claims.mjs';
 
 const pw = loadPlaywright();
 if (!pw) {

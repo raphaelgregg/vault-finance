@@ -2,7 +2,7 @@
  * Diálogo de ESTORNO (VF-ARQ-02): pede o motivo e envia ao servidor com uma `operationId` gerada ao abrir
  * (duplo clique/retry não estornam duas vezes). Mostra o erro real do servidor; a tela só atualiza após confirmação.
  */
-import { el, toast } from '../core/ui.js';
+import { el, toast } from './dom.js';
 import { formModal, field } from './form-kit.js';
 import { createReversal, REVERSAL_KINDS } from '../services/reversals.js';
 import { newOperationId } from '../services/financeApi.js';

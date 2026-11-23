@@ -2,7 +2,7 @@
  * Assinaturas — VF-2-03a: CRUD integrado ao Firestore (users/{uid}/subscriptions).
  * Custo mensal/anual calculado a partir das ATIVAS (js/core/model.js); nada é gravado derivado.
  */
-import { el, $, $$, toast, refreshIcons } from '../core/ui.js';
+import { el, $, toast, refreshIcons } from '../components/dom.js';
 import { openModal, closeModal } from '../components/modal.js';
 import {
   listSubscriptions,
@@ -19,12 +19,13 @@ import {
   formatCents,
   parseMoneyToCents,
 } from '../services/subscriptions.js';
-import { listCategories, getCategoryKindOptions } from '../services/categories.js';
+import { listCategories, categoryLabel } from '../services/categories.js';
 import { listAccounts } from '../services/accounts.js';
 import { accountLabel as accountText } from '../core/model.js';
 import { listCards } from '../services/creditCards.js';
 
 import { todayInAppZone } from '../utils/dates.js';
+import { clearErrors, formatCentsInput, formatDate, optionLabel } from '../components/form-kit.js';
 export const meta = { title: 'Assinaturas', icon: 'repeat' };
 
 let currentUser = null;
@@ -351,34 +352,9 @@ function openSubscriptionModal(item = null) {
   $('#name', form).focus();
 }
 
-function formatCentsInput(cents) {
-  const abs = Math.abs(Number(cents));
-  return `${Number(cents) < 0 ? '-' : ''}${Math.trunc(abs / 100)},${String(abs % 100).padStart(2, '0')}`;
-}
-
-function categoryLabel(category) {
-  const kind = getCategoryKindOptions().find((o) => o.value === category.kind)?.label;
-  return kind ? `${category.name} (${kind})` : category.name;
-}
-
 function accountLabel(accountId) {
   const account = accountsCache.find((a) => a.id === accountId);
   return account ? accountText(account) : (accountId ?? '—');
-}
-
-function optionLabel(options, value) {
-  return options.find((o) => o.value === value)?.label ?? value ?? '—';
-}
-
-function formatDate(value) {
-  if (!value) return '—';
-  const [y, m, d] = value.split('-');
-  return `${d}/${m}/${y}`;
-}
-
-function clearErrors(form) {
-  $$('.form__error', form).forEach((node) => (node.textContent = ''));
-  $$('.form__field', form).forEach((node) => node.classList.remove('form__field--error'));
 }
 
 function showErrors(form, errors) {

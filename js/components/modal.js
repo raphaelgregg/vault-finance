@@ -1,5 +1,5 @@
 /** Modal acessível: ESC fecha, clique no fundo fecha, foco vai para o diálogo. */
-import { el } from '../core/ui.js';
+import { el } from './dom.js';
 
 let current = null;
 
