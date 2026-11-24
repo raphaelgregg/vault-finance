@@ -190,6 +190,20 @@ describe('transfers service — transições de status (VF-2-01 / VF-ARQ-02)', (
     assert.deepEqual(api.calls, []);
   });
 
+  it('transferência cancelada/estornada NÃO pode ser reaberta nem confirmada de novo (ficaria presa); editar mantendo cancelada é permitido', async () => {
+    for (const status of ['pending', 'confirmed']) {
+      const api = fakeFinance();
+      const m = makeIo({ status: 'cancelled', finance: api.finance });
+      const r = await updateTransfer(uid, 't1', { fromAccountId: 'a1', toAccountId: 'a2', amountCents: '99,00', date: '2026-12-02', reason: 'x', status }, m.io);
+      assert.equal(r.ok, false, status);
+      assert.match(r.errors.status, /não pode ser reaberta/i);
+      assert.deepEqual(m.calls.update, []);
+      assert.deepEqual(api.calls, []);
+    }
+    const keep = makeIo({ status: 'cancelled' });
+    assert.equal((await updateTransfer(uid, 't1', { fromAccountId: 'a1', toAccountId: 'a2', amountCents: '99,00', date: '2026-12-02', reason: 'só nota', status: 'cancelled' }, keep.io)).ok, true);
+  });
+
   it('editar pendente para confirmada: grava como pendente e confirma NO SERVIDOR (o débito só existe após confirmar)', async () => {
     const api = fakeFinance();
     const m = makeIo({ status: 'pending', finance: api.finance });
