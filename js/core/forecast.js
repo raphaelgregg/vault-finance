@@ -53,7 +53,7 @@ export function subscriptionOccurrences(subscription, start, end) {
   let date = subscription?.nextChargeDate;
   for (let i = 0; i < 60 && typeof date === 'string' && date <= end; i += 1) {
     if (date >= start) out.push(date);
-    date = advanceChargeDate(date, subscription.periodicity);
+    date = advanceChargeDate(date, subscription.periodicity, subscription.chargeDay);
   }
   return out;
 }

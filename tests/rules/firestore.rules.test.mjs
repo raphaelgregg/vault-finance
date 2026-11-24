@@ -629,6 +629,38 @@ describe('Assinaturas (VF-2-03a)', () => {
     await assertFails(updateDoc(subDoc(db, 'com-devedor'), { debtorId: 'dv-bob', updatedAt: serverTimestamp() }));
   });
 
+  it('VF-COR-09: chargeDay opcional, inteiro de 1 a 31; inválidos negados', async () => {
+    const db = asUser(ALICE);
+    await assertSucceeds(setDoc(subDoc(db, 'cd1'), sub({ chargeDay: 31 })));
+    await assertSucceeds(setDoc(subDoc(db, 'cd2'), sub({ chargeDay: 29 })));
+    await assertSucceeds(setDoc(subDoc(db, 'cd3'), sub())); // ausente continua válido
+    for (const [i, bad] of [0, 32, -1, 1.5, '31', null].entries()) await assertFails(setDoc(subDoc(db, `bad${i}`), sub({ chargeDay: bad })));
+    await assertSucceeds(updateDoc(subDoc(db, 'cd1'), { chargeDay: deleteField(), updatedAt: serverTimestamp() })); // volta a dia ≤ 28
+    await assertFails(updateDoc(subDoc(db, 'cd2'), { chargeDay: 40, updatedAt: serverTimestamp() }));
+  });
+
+  it('VF-COR-07: regravar o MESMO id de cobrança (dívida ou compra da assinatura) é negado — lote repetido/concorrente falha inteiro e não duplica nem soma no devedor', async () => {
+    const db = asUser(ALICE);
+    const stamps = () => ({ createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    await seedDoc(`users/${ALICE}/debtors/dv`, { name: 'Roberta', loanDate: new Date('2026-11-10T12:00:00.000Z'), lentCents: 0, receivedCents: 0, status: 'open' });
+    const debt = (extra = {}) => ({ debtorId: 'dv', description: 'Netflix', principalCents: 5590, dueDate: new Date('2026-12-05T12:00:00.000Z'), installmentNumber: 1, installmentsTotal: 1, debtGroupId: 'g1', status: 'pending', ...stamps(), ...extra });
+    const debtRef = doc(db, 'users', ALICE, 'debts', 'sub_sub1_2026-12-05');
+    await assertSucceeds(setDoc(debtRef, debt())); // 1ª cobrança daquela data
+    await assertFails(setDoc(debtRef, debt({ debtGroupId: 'g2' }))); // 2ª: regravar o id = update, negado
+    const batch = writeBatch(db); // lote completo da 2ª tentativa: dívida repetida + soma no devedor
+    batch.set(debtRef, debt({ debtGroupId: 'g3' }));
+    batch.update(doc(db, 'users', ALICE, 'debtors', 'dv'), { lentCents: 11180, updatedAt: serverTimestamp() });
+    await assertFails(batch.commit());
+    assert.equal((await getDoc(doc(db, 'users', ALICE, 'debtors', 'dv'))).data().lentCents, 0); // devedor intacto
+    // compra no cartão da assinatura: mesmo princípio
+    await seedDoc(`users/${ALICE}/creditCards/cx`, { name: 'Nubank', brand: 'M', limitCents: 500000, closingDay: 10, dueDay: 17, status: 'active' });
+    await seedDoc(`users/${ALICE}/invoices/cx_2026-12`, { cardId: 'cx', referenceMonth: '2026-12', closingDate: new Date('2026-12-10T12:00:00.000Z'), dueDate: new Date('2026-12-17T12:00:00.000Z'), status: 'open' });
+    const purchase = (extra = {}) => ({ cardId: 'cx', description: 'Netflix', amountCents: 5590, purchaseDate: new Date('2026-12-05T12:00:00.000Z'), installmentsTotal: 1, installmentNumber: 1, categoryId: 'cat-casa', invoiceId: 'cx_2026-12', notes: 'Assinatura', ...stamps(), ...extra });
+    const buyRef = doc(db, 'users', ALICE, 'cardPurchases', 'sub_sub1_2026-12-05');
+    await assertSucceeds(setDoc(buyRef, purchase()));
+    await assertFails(setDoc(buyRef, purchase({ description: 'Netflix de novo' })));
+  });
+
   it('assinatura no cartão (VF-2-03r): cardId opcional existente; nega cartão inexistente; remove o vínculo; cobrança = parcela + avanço da data no MESMO lote', async () => {
     const db = asUser(ALICE);
     const stamps = () => ({ createdAt: serverTimestamp(), updatedAt: serverTimestamp() });

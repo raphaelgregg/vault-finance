@@ -417,6 +417,13 @@ describe('assinatura no cartão: comprometimento (mês da cobrança) × saída d
     assert.deepEqual(cartaoDevedor.subscriptions, cartao.subscriptions);
   });
 
+  it('VF-COR-09: ocorrências de assinatura do dia 31 respeitam a âncora (28/02 → 31/03 → 30/04 → 31/05)', () => {
+    const s31 = { nextChargeDate: '2026-02-28', periodicity: 'monthly', chargeDay: 31 };
+    assert.deepEqual(subscriptionOccurrences(s31, '2026-02-01', '2026-06-30'), ['2026-02-28', '2026-03-31', '2026-04-30', '2026-05-31', '2026-06-30']);
+    const legacy = { nextChargeDate: '2026-02-28', periodicity: 'monthly' }; // sem chargeDay: como antes
+    assert.deepEqual(subscriptionOccurrences(legacy, '2026-02-01', '2026-04-30'), ['2026-02-28', '2026-03-28', '2026-04-28']);
+  });
+
   it('assinatura direta (conta) segue pela data da cobrança: comprometimento = caixa no mesmo mês', () => {
     const f = monthlyForecast({ ...base, subscriptions: [sub({ cardId: undefined, accountId: 'a1' })] });
     assert.deepEqual([f.subscriptions.directCents, f.subscriptions.cardCommitmentCents, f.subscriptions.cardCashCents], [5590, 0, 0]);

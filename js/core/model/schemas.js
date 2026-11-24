@@ -93,6 +93,8 @@ export const SCHEMAS = Object.freeze({
       amountCents: money(),
       periodicity: { kind: 'enum', required: true, values: SUBSCRIPTION_PERIODICITIES.map((p) => p.value) },
       nextChargeDate: date(),
+      // Dia original da cobrança (29–31), gravado só quando o ajuste ao fim do mês poderia perdê-lo (VF-COR-09).
+      chargeDay: { kind: 'int', required: false, min: 1, max: 31 },
       // Conta OPCIONAL (VF-COR-07): assinatura pode estar só em cartão, só com devedor ou sem vínculo (apenas acompanhamento).
       accountId: refField(false),
       // Cobrada no cartão (VF-2-03r): a cobrança vira parcela única na FATURA (não é débito direto na conta).
