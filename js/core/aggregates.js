@@ -8,6 +8,8 @@ import { monthsBetween } from '../utils/dates.js';
 
 const cents = (value) => (Number.isInteger(value) ? value : Number(value) || 0);
 const monthOf = (isoDate) => (typeof isoDate === 'string' ? isoDate.slice(0, 7) : null);
+/** "AAAA-MM" → "MM/AAAA" (formato brasileiro na tela). */
+const monthBR = (month) => (/^\d{4}-\d{2}$/.test(month ?? '') ? `${month.slice(5)}/${month.slice(0, 4)}` : String(month ?? '—'));
 
 // ---------------------------------------------------------------------------
 // Orçamentos
@@ -92,7 +94,7 @@ export function upcomingDue({ expenses = [], subscriptions = [], invoices = [], 
   }
   for (const i of invoices) {
     if (i?.status === 'closed' && i.dueDate >= today) {
-      items.push({ kind: 'invoice', id: i.id, label: `Fatura ${i.referenceMonth}`, date: i.dueDate, amountCents: cents(i.totalCents) });
+      items.push({ kind: 'invoice', id: i.id, label: `Fatura ${monthBR(i.referenceMonth)}`, date: i.dueDate, amountCents: cents(i.totalCents) });
     }
   }
   return items.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)).slice(0, limit);

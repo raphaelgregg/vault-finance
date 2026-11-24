@@ -184,3 +184,10 @@ describe('dashboard por período e visões de situação', () => {
     assert.deepEqual(s.map((x) => [x.id, x.viaCard]), [['b', false], ['a', true]]);
   });
 });
+
+describe('upcomingDue — rótulo de fatura em formato brasileiro', () => {
+  it('mostra "Fatura MM/AAAA", nunca AAAA-MM', () => {
+    const up = upcomingDue({ today: '2026-11-19', invoices: [{ id: 'i1', status: 'closed', referenceMonth: '2026-11', dueDate: '2026-11-25', totalCents: 1000 }] });
+    assert.equal(up[0].label, 'Fatura 11/2026');
+  });
+});
