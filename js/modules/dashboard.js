@@ -183,7 +183,8 @@ function draw(container, data, rerender) {
             { key: 'name', label: 'Devedor' },
             { key: 'lentCents', label: 'Emprestado/lançado', numeric: true, render: (v) => formatCents(v) },
             { key: 'receivedCents', label: 'Recebido', numeric: true, render: (v) => formatCents(v) },
-            { key: 'pendingCents', label: 'A receber', numeric: true, render: (v) => formatCents(v) },
+            { key: 'monthDueCents', label: `A receber em ${formatMonth(data.month)}`, numeric: true, render: (v) => (v === null ? '—' : formatCents(v)) },
+            { key: 'pendingCents', label: 'Total a receber', numeric: true, render: (v) => formatCents(v) },
           ],
           rows: data.debtorsList.slice(0, 8), compact: true,
         })

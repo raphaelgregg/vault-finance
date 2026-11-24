@@ -124,9 +124,11 @@ export async function loadDashboard(uid, io = {}) {
   const series = loaded ? periodSeries(loaded.movements.incomes, loaded.movements.expenses, period) : null;
 
   // A receber de devedores no mês (fechamento) — depende da lista de devedores.
+  const debtorMonthById = new Map(); // devedor → a receber no mês (fechamento)
   const debtorMonth = debtors
     ? await attempt('debtorMonth', async () => {
       const map = await loadDebtorStatements(uid, debtors, month, { list: fetchList });
+      for (const [id, st] of map) debtorMonthById.set(id, st.totalCents);
       return [...map.values()].reduce((t, st) => t + st.totalCents, 0);
     }, null)
     : null;
@@ -153,7 +155,9 @@ export async function loadDashboard(uid, io = {}) {
     series,
     accounts: loaded ? accountsOverview(accounts, loaded.balances, accountLabel, ACCOUNT_TYPE_LABELS) : null,
     cardsView,
-    debtorsList: debtors ? debtorsOverview(debtors, debtorPendingCents) : null,
+    debtorsList: debtors
+      ? debtorsOverview(debtors, debtorPendingCents).map((d) => ({ ...d, monthDueCents: debtorMonth === null ? null : (debtorMonthById.get(d.id) ?? 0) }))
+      : null,
     subscriptionsList: subscriptions ? subscriptionsOverview(subscriptions, subscriptionMonthlyCents) : null,
     subscriptionsSummary: subscriptions ? summarizeSubscriptions(subscriptions) : null,
     netPositionCents,
