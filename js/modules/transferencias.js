@@ -9,7 +9,7 @@
 import { el, $, toast, refreshIcons } from '../components/dom.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { createStatCard } from '../components/stat-card.js';
-import { formatCentsInput, formatDate, clearErrors, showFormErrors as showErrors } from '../components/form-kit.js';
+import { formatCentsInput, formatDate, clearErrors, showFormErrors as showErrors, confirmModal } from '../components/form-kit.js';
 import {
   listTransfers,
   createTransfer,
@@ -236,9 +236,9 @@ function createFilterBar() {
     el('div', { class: 'panel__header' }, [
       el('h2', { text: 'Filtros' }),
     ]),
-    el('div', { class: 'panel__body', style: 'padding: var(--space-4);' }, [
-      el('div', { class: 'form__row', style: 'gap: var(--space-3); flex-wrap: wrap;' }, [
-        el('div', { class: 'form__field', style: 'flex: 1; min-width: 180px;' }, [
+    el('div', { class: 'panel__body filter-body' }, [
+      el('div', { class: 'form__row filter-row' }, [
+        el('div', { class: 'form__field filter-field' }, [
           el('label', { for: 'filter-status', text: 'Status' }),
           el('select', {
             id: 'filter-status',
@@ -249,7 +249,7 @@ function createFilterBar() {
             },
           }, statusOptions.map((o) => el('option', { value: o.value, selected: currentFilter.status === o.value }, o.label))),
         ]),
-        el('div', { class: 'form__field', style: 'flex: 1; min-width: 180px;' }, [
+        el('div', { class: 'form__field filter-field' }, [
           el('label', { for: 'filter-month', text: 'Mês' }),
           el('select', {
             id: 'filter-month',
@@ -641,16 +641,24 @@ async function confirmTransferAction(transfer) {
   }
 }
 
-/** Confirma cancelamento. */
-async function confirmCancelTransfer(transfer) {
-  const result = await cancelTransfer(currentUser.uid, transfer.id);
-  if (result.ok) {
-    toast('Transferência cancelada.');
-    await loadData();
-    renderPage($('.content') || document.getElementById('page-content'));
-  } else {
-    toast(result.errors?._form || 'Erro ao cancelar.', 5000);
-  }
+/** Pede confirmação (cancelar é terminal) e só então cancela. */
+function confirmCancelTransfer(transfer) {
+  confirmModal({
+    title: 'Cancelar transferência',
+    message: `Cancelar a transferência "${transfer.reason ?? "transferência"}"?`,
+    hint: 'A transferência cancelada não será efetivada.',
+    confirmLabel: 'Cancelar transferência',
+    onConfirm: async () => {
+      const result = await cancelTransfer(currentUser.uid, transfer.id);
+      if (result.ok) {
+        toast('Transferência cancelada.');
+        await loadData();
+        renderPage($('.content') || document.getElementById('page-content'));
+      } else {
+        toast(result.errors?._form || 'Erro ao cancelar.', 5000);
+      }
+    },
+  });
 }
 
 /** Confirma exclusão. */

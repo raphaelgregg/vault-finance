@@ -9,7 +9,7 @@
 import { el, $, toast, refreshIcons } from '../components/dom.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { createStatCard } from '../components/stat-card.js';
-import { formatCentsInput, formatDate, clearErrors, showFormErrors as showErrors } from '../components/form-kit.js';
+import { formatCentsInput, formatDate, clearErrors, showFormErrors as showErrors, confirmModal } from '../components/form-kit.js';
 import { filterMovements, accountLabel } from '../core/model.js';
 import {
   listExpenses,
@@ -164,9 +164,9 @@ function createFilterBar() {
     el('div', { class: 'panel__header' }, [
       el('h2', { text: 'Filtros' }),
     ]),
-    el('div', { class: 'panel__body', style: 'padding: var(--space-4);' }, [
-      el('div', { class: 'form__row', style: 'gap: var(--space-3); flex-wrap: wrap;' }, [
-        el('div', { class: 'form__field', style: 'flex: 1; min-width: 180px;' }, [
+    el('div', { class: 'panel__body filter-body' }, [
+      el('div', { class: 'form__row filter-row' }, [
+        el('div', { class: 'form__field filter-field' }, [
           el('label', { for: 'filter-status', text: 'Status' }),
           el('select', {
             id: 'filter-status',
@@ -177,7 +177,7 @@ function createFilterBar() {
             },
           }, statusOptions.map((o) => el('option', { value: o.value, selected: currentFilter.status === o.value }, o.label))),
         ]),
-        el('div', { class: 'form__field', style: 'flex: 1; min-width: 180px;' }, [
+        el('div', { class: 'form__field filter-field' }, [
           el('label', { for: 'filter-month', text: 'Mês' }),
           el('select', {
             id: 'filter-month',
@@ -188,7 +188,7 @@ function createFilterBar() {
             },
           }, monthOptions.map((o) => el('option', { value: o.value, selected: currentFilter.month === o.value }, o.label))),
         ]),
-        el('div', { class: 'form__field', style: 'flex: 1; min-width: 180px;' }, [
+        el('div', { class: 'form__field filter-field' }, [
           el('label', { for: 'filter-category', text: 'Categoria' }),
           el('select', {
             id: 'filter-category',
@@ -582,16 +582,24 @@ async function confirmMarkPaid(expense) {
   }
 }
 
-/** Confirma cancelamento. */
-async function confirmCancelExpense(expense) {
-  const result = await cancelExpense(currentUser.uid, expense.id);
-  if (result.ok) {
-    toast('Despesa cancelada.');
-    await loadData();
-    renderPage($('.content') || document.getElementById('page-content'));
-  } else {
-    toast(result.errors?._form ?? 'Erro ao cancelar.', 5000);
-  }
+/** Pede confirmação (cancelar é terminal) e só então cancela. */
+function confirmCancelExpense(expense) {
+  confirmModal({
+    title: 'Cancelar despesa',
+    message: `Cancelar a despesa "${expense.description}"?`,
+    hint: 'A despesa cancelada deixa de contar nos totais e nas previsões.',
+    confirmLabel: 'Cancelar despesa',
+    onConfirm: async () => {
+      const result = await cancelExpense(currentUser.uid, expense.id);
+      if (result.ok) {
+        toast('Despesa cancelada.');
+        await loadData();
+        renderPage($('.content') || document.getElementById('page-content'));
+      } else {
+        toast(result.errors?._form ?? 'Erro ao cancelar.', 5000);
+      }
+    },
+  });
 }
 
 /** Confirma exclusão. */

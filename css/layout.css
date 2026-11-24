@@ -237,6 +237,28 @@ p {
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
 }
 
+/* Dashboard: painéis de contas/cartões/devedores/assinaturas lado a lado quando há espaço. */
+.grid--panels {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr));
+  align-items: start;
+}
+
+.grid--panels > .panel {
+  min-width: 0;
+}
+
+.grid--panels > .panel--wide {
+  grid-column: 1 / -1;
+}
+
+.attention {
+  margin: 0;
+  padding-left: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
 /* ---------- Responsivo ---------- */
 @media (max-width: 1024px) {
   .app {
@@ -285,4 +307,37 @@ p {
   .grid--cards {
     grid-template-columns: 1fr;
   }
+
+  /* Topbar em celular: o título encolhe com reticências (títulos longos como "Transferências" não cabem ao lado de menu,
+     tema, usuário e sair), o chip do usuário trunca e "Sair" vira só o ícone. */
+  .topbar {
+    padding: var(--space-2) var(--space-3);
+    gap: var(--space-2);
+  }
+
+  .topbar__title {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .topbar__spacer {
+    display: none;
+  }
+
+  .topbar .badge {
+    max-width: 96px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 0 1 auto;
+  }
+
+  .topbar .btn--ghost span {
+    display: none;
+  }
 }
+
+.sidebar__collapse { width: 100%; justify-content: flex-start; gap: 12px; }

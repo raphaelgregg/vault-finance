@@ -2,6 +2,7 @@
 import { el } from './dom.js';
 
 let current = null;
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export function openModal({ title, body, footer = [], onClose, size }) {
   closeModal();
@@ -43,12 +44,25 @@ export function openModal({ title, body, footer = [], onClose, size }) {
     formNode.append(el('div', { class: 'modal__footer' }, footer));
   }
 
+  // Quem tinha o foco ao abrir (o botão que abriu o modal) recebe o foco de volta ao fechar.
+  const opener = document.activeElement;
+
   const onKeyDown = (event) => {
-    if (event.key === 'Escape') closeModal();
+    if (event.key === 'Escape') { closeModal(); return; }
+    if (event.key !== 'Tab') return;
+    // Prisão de foco: Tab/Shift+Tab circulam DENTRO do diálogo (nunca vão para a página atrás).
+    const items = [...dialog.querySelectorAll(FOCUSABLE)].filter((node) => node.offsetParent !== null);
+    if (!items.length) { event.preventDefault(); dialog.focus(); return; }
+    const first = items[0];
+    const last = items[items.length - 1];
+    const active = document.activeElement;
+    if (event.shiftKey && (active === first || active === dialog || !dialog.contains(active))) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && (active === last || !dialog.contains(active))) { event.preventDefault(); first.focus(); }
   };
 
   document.addEventListener('keydown', onKeyDown);
   document.body.append(overlay);
+  document.body.classList.add('modal-open'); // trava a rolagem do fundo
   dialog.focus();
 
   current = {
@@ -57,6 +71,8 @@ export function openModal({ title, body, footer = [], onClose, size }) {
     destroy() {
       document.removeEventListener('keydown', onKeyDown);
       overlay.remove();
+      document.body.classList.remove('modal-open');
+      if (opener?.isConnected && typeof opener.focus === 'function') opener.focus();
       onClose?.();
     },
   };

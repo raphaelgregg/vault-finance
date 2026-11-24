@@ -172,3 +172,96 @@ export function monthForecast(result = { incomeCents: 0, expenseCents: 0 }, pend
     forecastResultCents: (result.incomeCents + incomeCents) - (result.expenseCents + expenseCents),
   };
 }
+
+// ---------------------------------------------------------------------------
+// Dashboard por período e visões de contas/cartões/assinaturas (puras)
+// ---------------------------------------------------------------------------
+
+const inRange = (isoDate, start, end) => typeof isoDate === 'string' && (!start || isoDate >= start) && (!end || isoDate <= end);
+
+/** Como `monthResult`, para um intervalo de dias [start, end] (null = sem limite): receitas recebidas e despesas pagas. */
+export function periodResult(incomes = [], expenses = [], start = null, end = null) {
+  const incomeCents = incomes.reduce((t, i) => (
+    i?.status === 'received' && inRange(i.receivedDate, start, end) ? t + cents(i.amountCents) : t), 0);
+  const expenseCents = expenses.reduce((t, e) => (
+    e?.status === 'paid' && inRange(e.paidDate, start, end) ? t + cents(e.amountCents) : t), 0);
+  return { incomeCents, expenseCents, resultCents: incomeCents - expenseCents };
+}
+
+/**
+ * Série mensal realizada do período (`resolvePeriod`). Em "Todo o período" vai do primeiro ao último mês com
+ * movimento realizado (no máximo 120 meses); sem movimento = [].
+ */
+export function periodSeries(incomes = [], expenses = [], period = {}) {
+  let { from, to } = period;
+  if (!from || !to) {
+    const months = [
+      ...incomes.filter((i) => i?.status === 'received').map((i) => monthOf(i.receivedDate)),
+      ...expenses.filter((e) => e?.status === 'paid').map((e) => monthOf(e.paidDate)),
+    ].filter(Boolean).sort();
+    if (!months.length) return [];
+    from = months[0]; to = months[months.length - 1];
+  }
+  return monthlySeries(incomes, expenses, from, to);
+}
+
+/**
+ * Contas ATIVAS com saldo derivado, do maior para o menor saldo. Retorna [{ id, label, typeLabel, balanceCents }].
+ * `labelOf`/`typeLabels` injetados pelo chamador (mantém este módulo sem dependência de UI).
+ */
+export function accountsOverview(accounts = [], balances = new Map(), labelOf = (a) => a.name, typeLabels = {}) {
+  return accounts
+    .filter((a) => a?.status === 'active')
+    .map((a) => ({ id: a.id, label: labelOf(a), typeLabel: typeLabels[a.type] ?? '', balanceCents: balances.get(a.id) ?? 0 }))
+    .sort((a, b) => b.balanceCents - a.balanceCents || a.label.localeCompare(b.label));
+}
+
+/**
+ * Cartões ATIVOS: limite, usado, disponível, % usado e faturas ainda não pagas (abertas somam as parcelas; fechadas, o total).
+ * `usedFn(card, purchases, invoices)` = `cardLimitUsage` (injetado). Retorna { rows, dueCents } com
+ * rows [{ id, name, brand, limitCents, usedCents, availableCents, usedPercent, dueCents, nextDueDate, overdue }].
+ */
+export function cardsOverview({ cards = [], invoices = [], purchases = [], today = '', usedFn }) {
+  const rows = cards.filter((c) => c?.status === 'active').map((card) => {
+    const own = invoices.filter((i) => i.cardId === card.id);
+    const ownPurchases = purchases.filter((p) => p.cardId === card.id);
+    const usage = usedFn(card, ownPurchases, own);
+    let dueCents = 0;
+    let nextDueDate = null;
+    for (const invoice of own) {
+      if (invoice.status !== 'open' && invoice.status !== 'closed') continue;
+      const total = invoice.status === 'open'
+        ? ownPurchases.reduce((t, p) => (p.invoiceId === invoice.id ? t + cents(p.amountCents) : t), 0)
+        : cents(invoice.totalCents);
+      if (total <= 0) continue;
+      dueCents += total;
+      if (invoice.dueDate && (!nextDueDate || invoice.dueDate < nextDueDate)) nextDueDate = invoice.dueDate;
+    }
+    const limit = cents(card.limitCents);
+    return {
+      id: card.id, name: card.name, brand: card.brand, limitCents: limit, usedCents: usage.usedCents, availableCents: usage.availableCents,
+      usedPercent: limit > 0 ? Math.floor((usage.usedCents * 100) / limit) : 0, dueCents, nextDueDate, overdue: Boolean(nextDueDate && today && nextDueDate < today),
+    };
+  }).sort((a, b) => b.usedCents - a.usedCents || String(a.name).localeCompare(String(b.name)));
+  return { rows, dueCents: rows.reduce((t, r) => t + r.dueCents, 0) };
+}
+
+/** Devedores EM ABERTO com saldo a receber (> 0), do maior para o menor. `pendingFn` = `debtorPendingCents` (injetado). */
+export function debtorsOverview(debtors = [], pendingFn = () => 0) {
+  return debtors
+    .filter((d) => d?.status === 'open')
+    .map((d) => ({ id: d.id, name: d.name, pendingCents: pendingFn(d), lentCents: cents(d.lentCents), receivedCents: cents(d.receivedCents) }))
+    .filter((d) => d.pendingCents > 0)
+    .sort((a, b) => b.pendingCents - a.pendingCents || String(a.name).localeCompare(String(b.name)));
+}
+
+/** Assinaturas ATIVAS por próxima cobrança. Retorna [{ id, name, amountCents, periodicity, nextChargeDate, viaCard, monthlyCents }]. `monthlyFn` = `subscriptionMonthlyCents`. */
+export function subscriptionsOverview(subscriptions = [], monthlyFn = () => 0) {
+  return subscriptions
+    .filter((s) => s?.status === 'active')
+    .map((s) => ({
+      id: s.id, name: s.name, amountCents: cents(s.amountCents), periodicity: s.periodicity, nextChargeDate: s.nextChargeDate,
+      viaCard: Boolean(s.cardId), monthlyCents: monthlyFn(s.amountCents, s.periodicity),
+    }))
+    .sort((a, b) => (a.nextChargeDate < b.nextChargeDate ? -1 : a.nextChargeDate > b.nextChargeDate ? 1 : 0));
+}
