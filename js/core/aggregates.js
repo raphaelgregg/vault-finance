@@ -8,6 +8,8 @@ import { monthsBetween } from '../utils/dates.js';
 
 const cents = (value) => (Number.isInteger(value) ? value : Number(value) || 0);
 const monthOf = (isoDate) => (typeof isoDate === 'string' ? isoDate.slice(0, 7) : null);
+/** "AAAA-MM" → "MM/AAAA" (formato brasileiro na tela). */
+const monthBR = (month) => (/^\d{4}-\d{2}$/.test(month ?? '') ? `${month.slice(5)}/${month.slice(0, 4)}` : String(month ?? '—'));
 
 // ---------------------------------------------------------------------------
 // Orçamentos
@@ -92,7 +94,7 @@ export function upcomingDue({ expenses = [], subscriptions = [], invoices = [], 
   }
   for (const i of invoices) {
     if (i?.status === 'closed' && i.dueDate >= today) {
-      items.push({ kind: 'invoice', id: i.id, label: `Fatura ${i.referenceMonth}`, date: i.dueDate, amountCents: cents(i.totalCents) });
+      items.push({ kind: 'invoice', id: i.id, label: `Fatura ${monthBR(i.referenceMonth)}`, date: i.dueDate, amountCents: cents(i.totalCents) });
     }
   }
   return items.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)).slice(0, limit);
@@ -217,33 +219,40 @@ export function accountsOverview(accounts = [], balances = new Map(), labelOf = 
 }
 
 /**
- * Cartões ATIVOS: limite, usado, disponível, % usado e faturas ainda não pagas (abertas somam as parcelas; fechadas, o total).
- * `usedFn(card, purchases, invoices)` = `cardLimitUsage` (injetado). Retorna { rows, dueCents } com
- * rows [{ id, name, brand, limitCents, usedCents, availableCents, usedPercent, dueCents, nextDueDate, overdue }].
+ * Cartões ATIVOS: limite, usado (todo o comprometido, inclusive parcelas futuras), disponível e % usado, mais as faturas ainda não pagas
+ * (abertas somam as parcelas; fechadas, o total). "A pagar" NÃO é a soma de todas: `dueCents` = faturas JÁ VENCIDAS + a PRÓXIMA a vencer
+ * (o que se paga agora/em seguida); o restante (meses futuros de compras parceladas) é `laterCents`, já contado em `usedCents`.
+ * `usedFn(card, purchases, invoices)` = `cardLimitUsage` (injetado). Retorna { rows, dueCents, laterCents } com rows
+ * [{ id, name, brand, limitCents, usedCents, availableCents, usedPercent, dueCents, overdueCents, laterCents, nextDueDate, overdue }].
  */
 export function cardsOverview({ cards = [], invoices = [], purchases = [], today = '', usedFn }) {
   const rows = cards.filter((c) => c?.status === 'active').map((card) => {
     const own = invoices.filter((i) => i.cardId === card.id);
     const ownPurchases = purchases.filter((p) => p.cardId === card.id);
     const usage = usedFn(card, ownPurchases, own);
-    let dueCents = 0;
-    let nextDueDate = null;
+    const unpaid = [];
     for (const invoice of own) {
       if (invoice.status !== 'open' && invoice.status !== 'closed') continue;
       const total = invoice.status === 'open'
         ? ownPurchases.reduce((t, p) => (p.invoiceId === invoice.id ? t + cents(p.amountCents) : t), 0)
         : cents(invoice.totalCents);
-      if (total <= 0) continue;
-      dueCents += total;
-      if (invoice.dueDate && (!nextDueDate || invoice.dueDate < nextDueDate)) nextDueDate = invoice.dueDate;
+      if (total > 0) unpaid.push({ dueDate: invoice.dueDate ?? null, referenceMonth: invoice.referenceMonth ?? '', total });
     }
+    unpaid.sort((a, b) => (a.dueDate ?? '9999') < (b.dueDate ?? '9999') ? -1 : (a.dueDate ?? '9999') > (b.dueDate ?? '9999') ? 1 : a.referenceMonth.localeCompare(b.referenceMonth));
+    const isOverdue = (i) => Boolean(today && i.dueDate && i.dueDate < today);
+    const firstUpcoming = unpaid.find((i) => !isOverdue(i));
+    const dueNow = unpaid.filter((i) => isOverdue(i) || i === firstUpcoming);
+    const dueCents = dueNow.reduce((t, i) => t + i.total, 0);
+    const overdueCents = unpaid.filter(isOverdue).reduce((t, i) => t + i.total, 0);
     const limit = cents(card.limitCents);
+    const nextDueDate = unpaid[0]?.dueDate ?? null;
     return {
       id: card.id, name: card.name, brand: card.brand, limitCents: limit, usedCents: usage.usedCents, availableCents: usage.availableCents,
-      usedPercent: limit > 0 ? Math.floor((usage.usedCents * 100) / limit) : 0, dueCents, nextDueDate, overdue: Boolean(nextDueDate && today && nextDueDate < today),
+      usedPercent: limit > 0 ? Math.floor((usage.usedCents * 100) / limit) : 0, dueCents, overdueCents,
+      laterCents: unpaid.reduce((t, i) => t + i.total, 0) - dueCents, nextDueDate, overdue: overdueCents > 0,
     };
   }).sort((a, b) => b.usedCents - a.usedCents || String(a.name).localeCompare(String(b.name)));
-  return { rows, dueCents: rows.reduce((t, r) => t + r.dueCents, 0) };
+  return { rows, dueCents: rows.reduce((t, r) => t + r.dueCents, 0), laterCents: rows.reduce((t, r) => t + r.laterCents, 0) };
 }
 
 /** Devedores EM ABERTO com saldo a receber (> 0), do maior para o menor. `pendingFn` = `debtorPendingCents` (injetado). */
