@@ -310,6 +310,71 @@ export async function deleteCardPurchase(uid, purchaseId, io = {}) {
   return { ok: true };
 }
 
+/**
+ * Corrige uma parcela de compra. A compra lançada é imutável nas Rules (não há `update`), então a correção é uma TROCA ATÔMICA:
+ * a parcela é excluída e outra, com os dados corrigidos, é criada no MESMO lote (tudo ou nada; auditoria de exclusão + criação).
+ * Editáveis: descrição, categoria e, só em compra à vista (1/1), a data — que pode mudar a fatura (faturas novas são criadas
+ * antes, como no lançamento). Valor, parcelas, cartão e devedor não mudam (exclua e lance de novo). Exige fatura aberta, compra sem
+ * devedor e que não seja de assinatura. `rawData`: { description, purchaseDate, categoryId?, notes? }.
+ * Retorna { ok, id, invoiceMonth, errors }.
+ */
+export async function updateCardPurchase(uid, purchaseId, rawData = {}, io = {}) {
+  const fetch = io.getById ?? getById;
+  const purchase = await fetch(uid, PURCHASES, purchaseId);
+  if (!purchase) return { ok: false, errors: { _form: 'Compra não encontrada.' } };
+  if (purchase.debtorId) return { ok: false, errors: { _form: 'Esta compra está vinculada a um devedor e não pode ser alterada.' } };
+  if (purchase.notes === 'Assinatura') return { ok: false, errors: { _form: 'Compra gerada por assinatura: altere a assinatura em Assinaturas.' } };
+  const current = purchase.invoiceId ? await fetch(uid, INVOICES, purchase.invoiceId) : null;
+  if (current && current.status !== 'open') return { ok: false, errors: { _form: 'A fatura desta compra já está fechada ou paga.' } };
+  const card = await fetch(uid, CARDS, purchase.cardId);
+  if (!card) return { ok: false, errors: { _form: 'Cartão não encontrado.' } };
+
+  const single = purchase.installmentsTotal === 1;
+  const purchaseDate = rawData.purchaseDate || purchase.purchaseDate;
+  const dateChanged = purchaseDate !== purchase.purchaseDate;
+  if (dateChanged && !single) {
+    return { ok: false, errors: { purchaseDate: 'Compra parcelada: a data não pode ser alterada. Exclua as parcelas e lance a compra de novo.' } };
+  }
+  const categoryId = 'categoryId' in rawData ? rawData.categoryId : purchase.categoryId;
+  const notes = 'notes' in rawData ? rawData.notes : purchase.notes;
+
+  let invoiceId = purchase.invoiceId;
+  const invoiceOps = [];
+  let invoiceMonth = current?.referenceMonth ?? null;
+  if (dateChanged) {
+    const invoices = await (io.list ?? list)(uid, INVOICES, byCard(card.id));
+    const byMonth = new Map(invoices.map((i) => [i.referenceMonth, i]));
+    let month = invoiceMonthForPurchase(card, purchaseDate);
+    if (!month) return { ok: false, errors: { purchaseDate: 'Data inválida.' } };
+    while (byMonth.has(month) && byMonth.get(month).status !== 'open') month = addMonths(month, 1);
+    invoiceMonth = month;
+    invoiceId = byMonth.get(month)?.id ?? `${card.id}_${month}`;
+    if (!byMonth.has(month)) {
+      invoiceOps.push({ type: 'create', collection: INVOICES, docId: invoiceId, data: { cardId: card.id, referenceMonth: month, ...invoiceDatesFor(card, month), status: 'open' } });
+    }
+  }
+
+  const part = buildEntity('cardPurchases', {
+    cardId: purchase.cardId, description: rawData.description ?? purchase.description, amountCents: centsToMoneyString(purchase.amountCents),
+    purchaseDate, installmentsTotal: purchase.installmentsTotal, installmentNumber: purchase.installmentNumber,
+    ...(invoiceId ? { invoiceId } : {}), ...(categoryId ? { categoryId } : {}), ...(notes ? { notes } : {}),
+  });
+  if (!part.ok) return { ok: false, errors: part.errors };
+  if (part.data.categoryId) {
+    const check = checkCategoryForMovement(await fetch(uid, COLLECTIONS.categories, part.data.categoryId), PURCHASE_CATEGORY_KINDS);
+    if (!check.ok) return check;
+  }
+
+  const commit = io.commitAtomic ?? commitAtomic;
+  // As Rules validam `invoiceId` com exists() no estado ANTERIOR ao lote: a fatura nova precisa existir antes da troca.
+  if (invoiceOps.length) await commit(uid, invoiceOps, io);
+  const ids = await commit(uid, [
+    { type: 'delete', collection: PURCHASES, docId: purchase.id ?? purchaseId, before: purchase },
+    { type: 'create', collection: PURCHASES, data: part.data },
+  ], io);
+  return { ok: true, id: ids[1], invoiceMonth };
+}
+
 const todayIso = (io) => todayInAppZone(io.now ? io.now() : new Date());
 
 /**

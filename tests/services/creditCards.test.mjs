@@ -5,7 +5,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createCard, updateCard, deleteCard, setCardStatus, cancelCard, blockCard, unblockCard,
-  registerCardPurchase, deleteCardPurchase, closeInvoice, payInvoice, cancelInvoice, deleteInvoice, getCardLimitUsage,
+  registerCardPurchase, deleteCardPurchase, updateCardPurchase, closeInvoice, payInvoice, cancelInvoice, deleteInvoice, getCardLimitUsage,
   getCardStatusOptions, getInvoiceStatusOptions,
 } from '../../js/services/creditCards.js';
 import {
@@ -361,5 +361,68 @@ describe('faturas — fechar, pagar e excluir compra', () => {
     assert.equal((await deleteCardPurchase(uid, 'p1', closed.io)).ok, false);
     assert.equal(closed.calls.remove.length, 0);
     assert.equal((await deleteCardPurchase(uid, 'zz', ok.io)).ok, false);
+  });
+});
+
+describe('corrigir compra lançada (troca atômica)', () => {
+  const buy = (o = {}) => ({ id: 'p1', cardId: 'c1', description: 'Fatura Dez', amountCents: 73597, purchaseDate: '2026-11-01', installmentsTotal: 1, installmentNumber: 1, invoiceId: 'c1_2026-11', ...o });
+
+  it('corrige descrição e mantém a fatura: exclui e recria no MESMO lote, sem tocar no valor', async () => {
+    const m = makeIo({ purchases: [buy()], invoices: [inv()] });
+    const r = await updateCardPurchase(uid, 'p1', { description: 'Mercado' }, m.io);
+    assert.equal(r.ok, true);
+    assert.equal(m.calls.atomic.length, 1);
+    const [del, create] = m.calls.atomic[0];
+    assert.deepEqual([del.type, del.docId, create.type], ['delete', 'p1', 'create']);
+    assert.equal(create.data.description, 'Mercado');
+    assert.equal(create.data.amountCents, 73597);
+    assert.equal(create.data.invoiceId, 'c1_2026-11');
+  });
+
+  it('mudar a data de compra à vista move para a fatura do novo ciclo (cria a fatura antes, em lote próprio)', async () => {
+    // fechamento dia 10: compra em 15/11 entra na fatura de 12/2026
+    const m = makeIo({ purchases: [buy()], invoices: [inv()] });
+    const r = await updateCardPurchase(uid, 'p1', { purchaseDate: '2026-11-15' }, m.io);
+    assert.deepEqual([r.ok, r.invoiceMonth], [true, '2026-12']);
+    assert.equal(m.calls.atomic.length, 2);
+    assert.deepEqual([m.calls.atomic[0][0].type, m.calls.atomic[0][0].docId], ['create', 'c1_2026-12']);
+    assert.equal(m.calls.atomic[1][1].data.invoiceId, 'c1_2026-12');
+  });
+
+  it('reaproveita fatura aberta existente e pula as não abertas', async () => {
+    const m = makeIo({ purchases: [buy()], invoices: [inv(), inv({ id: 'c1_2026-12', referenceMonth: '2026-12', status: 'closed' }), inv({ id: 'c1_2027-01', referenceMonth: '2027-01' })] });
+    const r = await updateCardPurchase(uid, 'p1', { purchaseDate: '2026-11-15' }, m.io);
+    assert.deepEqual([r.ok, r.invoiceMonth], [true, '2027-01']);
+    assert.equal(m.calls.atomic.length, 1); // sem fatura nova
+    assert.equal(m.calls.atomic[0][1].data.invoiceId, 'c1_2027-01');
+  });
+
+  it('bloqueia: fatura fechada/paga, devedor, assinatura, parcelada com data alterada, compra inexistente', async () => {
+    const cases = [
+      [makeIo({ purchases: [buy()], invoices: [inv({ status: 'closed' })] }), {}],
+      [makeIo({ purchases: [buy({ debtorId: 'd1' })], invoices: [inv()] }), {}],
+      [makeIo({ purchases: [buy({ notes: 'Assinatura' })], invoices: [inv()] }), {}],
+      [makeIo({ purchases: [buy({ installmentsTotal: 3 })], invoices: [inv()] }), { purchaseDate: '2026-11-20' }],
+    ];
+    for (const [m, raw] of cases) {
+      assert.equal((await updateCardPurchase(uid, 'p1', raw, m.io)).ok, false);
+      assert.equal(m.calls.atomic.length, 0);
+    }
+    assert.equal((await updateCardPurchase(uid, 'zz', {}, makeIo().io)).ok, false);
+  });
+
+  it('parcela de compra parcelada aceita corrigir descrição sem mudar a data', async () => {
+    const m = makeIo({ purchases: [buy({ installmentsTotal: 3, installmentNumber: 2 })], invoices: [inv()] });
+    const r = await updateCardPurchase(uid, 'p1', { description: 'TV', purchaseDate: '2026-11-01' }, m.io);
+    assert.equal(r.ok, true);
+    assert.deepEqual([m.calls.atomic[0][1].data.installmentNumber, m.calls.atomic[0][1].data.installmentsTotal], [2, 3]);
+  });
+
+  it('valida a descrição (vazia é rejeitada e nada é gravado)', async () => {
+    const m = makeIo({ purchases: [buy()], invoices: [inv()] });
+    const r = await updateCardPurchase(uid, 'p1', { description: '  ' }, m.io);
+    assert.equal(r.ok, false);
+    assert.ok(r.errors.description);
+    assert.equal(m.calls.atomic.length, 0);
   });
 });
