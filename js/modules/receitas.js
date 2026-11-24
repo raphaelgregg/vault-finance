@@ -6,6 +6,7 @@
  * - Validação client-side espelhando Security Rules
  * - Persistência em users/{uid}/incomes
  */
+import { brDateInput } from '../components/date-input.js';
 import { el, $, toast, refreshIcons } from '../components/dom.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { createStatCard } from '../components/stat-card.js';
@@ -433,9 +434,7 @@ function openIncomeModal(income = null) {
     el('div', { class: 'form__row' }, [
       el('div', { class: 'form__field' }, [
         el('label', { for: 'expectedDate', text: 'Data prevista *' }),
-        el('input', {
-          type: 'date',
-          id: 'expectedDate',
+        brDateInput({ id: 'expectedDate',
           name: 'expectedDate',
           required: true,
           value: income?.expectedDate ?? todayInAppZone(),
@@ -457,9 +456,7 @@ function openIncomeModal(income = null) {
     el('div', { class: 'form__row' }, [
       el('div', { class: 'form__field' }, [
         el('label', { for: 'receivedDate', text: 'Data de recebimento' }),
-        el('input', {
-          type: 'date',
-          id: 'receivedDate',
+        brDateInput({ id: 'receivedDate',
           name: 'receivedDate',
           value: income?.receivedDate ?? '',
         }),

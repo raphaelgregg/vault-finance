@@ -2,6 +2,7 @@
  * Relatórios — VF-2-03g. Período em meses (máx. 24), receitas × despesas realizadas por mês e
  * totais por categoria, com exportação CSV gerada no cliente. Somente leitura.
  */
+import { brMonthInput } from '../components/date-input.js';
 import { el, toast, refreshIcons } from '../components/dom.js';
 import {
   field, statCard, panelHeader, emptyBlock, dataTable, progressBar, formatMonth,
@@ -48,8 +49,8 @@ function download(filename, csv) {
 function draw() {
   const header = panelHeader({ icon: 'bar-chart-3', title: 'Relatórios', hint: 'Receitas e despesas realizadas por período e categoria.' });
 
-  const from = el('input', { type: 'month', id: 'rep-from', value: fromMonth });
-  const to = el('input', { type: 'month', id: 'rep-to', value: toMonth });
+  const from = brMonthInput({ id: 'rep-from', value: fromMonth });
+  const to = brMonthInput({ id: 'rep-to', value: toMonth });
   const apply = el('button', { type: 'button', class: 'btn btn--primary', text: 'Atualizar', onClick: async () => {
     fromMonth = from.value;
     toMonth = to.value;

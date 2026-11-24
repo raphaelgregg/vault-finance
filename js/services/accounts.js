@@ -98,7 +98,7 @@ export function computeOpeningAdjustment(account, movements, realCents) {
 export async function adjustOpeningBalance(uid, accountId, realInput, { openingDate = null, operationId } = {}, io = {}) {
   const realCents = typeof realInput === 'number' ? realInput : parseMoneyToCents(realInput);
   if (!Number.isInteger(realCents) || realCents < 0) return { ok: false, errors: { realBalance: 'Informe o saldo atual da conta (valor monetário válido, sem negativo).' } };
-  if (openingDate && !/^\d{4}-\d{2}-\d{2}$/.test(openingDate)) return { ok: false, errors: { openingDate: 'Data inválida (use AAAA-MM-DD).' } };
+  if (openingDate && !/^\d{4}-\d{2}-\d{2}$/.test(openingDate)) return { ok: false, errors: { openingDate: 'Data inválida (use DD/MM/AAAA).' } };
   // VF-ARQ-02: o servidor lê os movimentos (sem truncar: fail-closed acima do limite), calcula e grava na MESMA transação.
   const r = await (io.finance ?? financeResult)('account.adjustOpening', {
     accountId, realBalanceCents: realCents, ...(openingDate ? { openingDate } : {}),
