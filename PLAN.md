@@ -461,6 +461,8 @@ Convenção de IDs: `VF-<fase>-<nn>`. Preservar IDs; não remover tarefas conclu
   - Limitações: totais de semestre/ano/todo o período respeitam o teto `READ_LIMIT`=1000 por coleção (aviso existente); "a receber no mês" de devedores só por mês; assinaturas ativas agora lidas até o teto (antes 8).
   - Arquivos: utils/dates.js (`resolvePeriod`), core/aggregates.js, services/dashboard.js, modules/dashboard.js, css/layout.css, tests/model/aggregates.test.mjs, tests/e2e/flows.mjs.
 
+- [x] **VF-PWA-01 — App instalável no smartphone (Chrome)** (feature) — CONCLUÍDA 2026-11-24. `manifest.webmanifest` (standalone, tema #1f7a5c), ícones PNG 192/512/maskable/apple-touch em `assets/icons/`, `sw.js` mínimo (sem cache: dados financeiros nunca defasados), `js/pwa.js` (registro em `app.js`/`auth-page.js`), `<link rel=manifest>`/theme-color em todas as páginas, headers em `vercel.json`. Validado: CDP `getInstallabilityErrors` vazio e SW ativado; E2E ok. Não verificado: instalação real em Chrome Android (requer HTTPS publicado). Sem modo offline.
+
 ## Itens não verificados
 
 - CI no GitHub Actions: confirmar o run do commit de correção (ver Histórico) em Node 18 e 22.
@@ -533,3 +535,4 @@ Convenção de IDs: `VF-<fase>-<nn>`. Preservar IDs; não remover tarefas conclu
 - 2026-11-24 — VF-UX-01 concluída (ordenação e filtro em todas as tabelas).
 - 2026-11-24 — VF-UX-02 (layout/modais/responsividade) e VF-QA-01 (qualidade + confirmação de cancelamentos) concluídas.
 - 2026-11-24 — VF-UX-03 concluída (dashboard redesenhado).
+\n- 2026-11-24 — VF-PWA-01 concluída (PWA instalável).\n

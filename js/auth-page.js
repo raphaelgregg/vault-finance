@@ -8,6 +8,9 @@ import { connectEmulatorsOnce } from './firebase/client.js';
 import { signIn, register, resetPassword, authErrorMessage } from './services/auth.js';
 import { redirectIfAuthenticated } from './core/guard.js';
 import { toast } from './components/dom.js';
+import { registerPwa } from './pwa.js';
+
+registerPwa();
 
 applyStoredTheme();
 connectEmulatorsOnce();

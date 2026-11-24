@@ -12,6 +12,9 @@ import { mountTopbar } from './components/topbar.js';
 import { navItemById } from './utils/nav.js';
 import { $, toast, refreshIcons } from './components/dom.js';
 import { startTableTools } from './components/table-tools.js';
+import { registerPwa } from './pwa.js';
+
+registerPwa();
 
 const MODULES = {
   dashboard: () => import('./modules/dashboard.js'),
