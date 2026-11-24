@@ -35,8 +35,8 @@ const DEBTORS = COLLECTIONS.debtors;
 const MAX_INSTALLMENT = 360;
 const MAX_PLAN_INSTALLMENTS = 120; // 2 escritas por parcela (+ devedor) no mesmo lote (limite de 500)
 
-export async function listDebts(uid, debtorId) {
-  return list(uid, DEBTS, { where: [['debtorId', '==', debtorId]] });
+export async function listDebts(uid, debtorId, io = {}) {
+  return (io.list ?? list)(uid, DEBTS, { where: [['debtorId', '==', debtorId]] });
 }
 
 export async function listDebtPayments(uid, options = {}) {
@@ -103,7 +103,9 @@ export async function createDebtPlan(uid, rawData, io = {}) {
       dueDate: clampDayInMonth(month, day), installmentNumber: n, installmentsTotal: rawN, debtGroupId: groupId, status: 'pending',
     });
     if (!built.ok) return { ok: false, errors: built.errors };
-    ops.push({ type: 'create', collection: DEBTS, data: built.data });
+    // `io.debtDocIds[n-1]`: id determinístico (ex.: assinatura × data). Regravar o mesmo id é UPDATE (negado nas Rules de `debts`):
+    // lote repetido/concorrente falha inteiro e NÃO duplica a dívida nem soma de novo no devedor.
+    ops.push({ type: 'create', collection: DEBTS, ...(io.debtDocIds?.[n - 1] ? { docId: io.debtDocIds[n - 1] } : {}), data: built.data });
   }
   // Soma por `increment` (não valor absoluto de leitura velha); devedor quitado volta a `open` no mesmo lote.
   ops.push({
@@ -248,6 +250,20 @@ export async function settleMonthInstallments(uid, debtorId, month, rawData = {}
 /** Cancela parcela pendente/atrasada sem recebimentos (no servidor). `paid` só nasce de recebimentos. */
 export async function cancelDebt(uid, debtId, io = {}) {
   const r = await finance(io)('debt.cancel', { debtId }, { operationId: io.operationId, ...(io.apiOptions ?? {}) });
+  return r.ok ? { ok: true, result: r } : r;
+}
+
+/**
+ * Reagenda e/ou reajusta o valor de UMA parcela pendente/atrasada sem recebimentos (no servidor, `debt.reschedule`): a data,
+ * o valor e o emprestado do devedor mudam na mesma transação. `changes`: { dueDate?: 'AAAA-MM-DD', principalCents?: inteiro }.
+ */
+export async function rescheduleDebt(uid, debtId, changes = {}, io = {}) {
+  const params = {
+    debtId,
+    ...(changes.dueDate ? { dueDate: changes.dueDate } : {}),
+    ...(changes.principalCents !== undefined ? { principalCents: changes.principalCents } : {}),
+  };
+  const r = await finance(io)('debt.reschedule', params, { operationId: io.operationId ?? newOperationId(), ...(io.apiOptions ?? {}) });
   return r.ok ? { ok: true, result: r } : r;
 }
 

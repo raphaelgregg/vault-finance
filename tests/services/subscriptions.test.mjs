@@ -5,6 +5,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createSubscription,
+  chargeDocId,
   updateSubscription,
   deleteSubscription,
   setSubscriptionStatus,
@@ -55,7 +56,7 @@ describe('subscriptions — schema (espelha firestore.rules)', () => {
   it('chaves e enums iguais às Rules', () => {
     assert.deepEqual(
       Object.keys(SCHEMAS.subscriptions.fields).sort(),
-      ['accountId', 'amountCents', 'cardId', 'categoryId', 'debtorId', 'name', 'nextChargeDate', 'notes', 'periodicity', 'status']
+      ['accountId', 'amountCents', 'cardId', 'categoryId', 'chargeDay', 'debtorId', 'name', 'nextChargeDate', 'notes', 'periodicity', 'status']
     );
     assert.deepEqual(getPeriodicityOptions().map((o) => o.value), ['monthly', 'weekly', 'yearly']);
     assert.deepEqual(getSubscriptionStatusOptions().map((o) => o.value), ['active', 'paused', 'cancelled']);
@@ -169,7 +170,7 @@ describe('subscriptions — service', () => {
   });
 
   it('update grava e audita com o id', async () => {
-    const { io, calls } = makeIo(okCategory);
+    const { io, calls } = makeIo({ ...okCategory, getById: async () => ({ id: 'x1', status: 'active' }) });
     const r = await updateSubscription(uid, 'x1', raw(), io);
     assert.equal(r.ok, true);
     assert.equal(calls.update[0].id, 'x1');
@@ -268,5 +269,197 @@ describe('subscriptions — vínculos opcionais: conta, cartão e devedor (VF-CO
     assert.equal(r.ok, true);
     const written = updates[0];
     assert.deepEqual([written.accountId, written.cardId, written.debtorId], [null, null, null]);
+  });
+});
+
+describe('subscriptions — a dívida do devedor ACOMPANHA a assinatura (VF-COR-10, caminho sem cartão)', () => {
+  const raw = { name: 'Netflix', amountCents: '55,90', periodicity: 'monthly', nextChargeDate: '2026-12-05', categoryId: 'cat', status: 'active', debtorId: 'dv' };
+  const debt = (id, dueDate, over = {}) => ({ id, debtorId: 'dv', description: 'Netflix', principalCents: 5590, dueDate, status: 'pending', ...over });
+
+  /** Mundo em memória: `launched` = dívidas do devedor; `previous` = assinatura antes da edição; `receipts` = dívidas com recebimento. */
+  const mk = ({ launched = [], previous = null, debtorStatus = 'open', receipts = [], commit, finance } = {}) => {
+    const committed = [];
+    const updates = [];
+    const calls = [];
+    const deps = {
+      lookupCategory: async () => ({ id: 'cat', kind: 'expense' }),
+      lookupDebtor: async (u, id) => ({ id, status: debtorStatus }),
+      create: async () => 'new1',
+      update: async (u, c, id, data) => { updates.push({ c, id, data }); },
+      remove: async () => {},
+      writeAudit: async () => ({ ok: true }),
+      list: async (u, c, q) => (c === 'debts' ? launched.filter((d) => d.debtorId === q.where[0][2]) : []),
+      getById: async (u, c, id) => {
+        if (c === 'debtors') return { id, name: 'Roberta', status: debtorStatus, lentCents: 0, receivedCents: 0 };
+        if (c === 'subscriptions') return previous;
+        if (c === 'debts') return launched.find((d) => d.id === id) ?? null;
+        return null;
+      },
+      commitAtomic: commit ?? (async (u, ops) => { committed.push(ops); return ops.map((o, i) => o.docId ?? `n${i}`); }),
+      finance: finance ?? (async (op, params) => {
+        calls.push([op, params]);
+        if (receipts.includes(params.debtId)) return { ok: false, code: 'INVALID_STATE', status: 409, errors: { _form: 'A parcela já possui recebimentos.' } };
+        return { ok: true };
+      }),
+    };
+    return { deps, committed, updates, calls };
+  };
+  const debtCreates = (batches) => batches.flat().filter((o) => o.collection === 'debts');
+
+  it('CRIAR com devedor lança UMA dívida na data atual (id determinístico) e NÃO avança a data da assinatura', async () => {
+    const { deps, committed, updates } = mk();
+    const r = await createSubscription('u1', raw, deps);
+    assert.deepEqual([r.ok, r.charge.ok, r.charge.action, r.charge.date], [true, true, 'launched', '2026-12-05']);
+    assert.equal(committed.length, 1);
+    const [d] = debtCreates(committed);
+    assert.deepEqual([d.docId, d.data.dueDate, d.data.principalCents, d.data.description], [chargeDocId('new1', '2026-12-05'), '2026-12-05', 5590, 'Netflix']);
+    assert.equal(chargeDocId('new1', '2026-12-05'), 'sub_new1_2026-12-05');
+    assert.equal(committed[0].some((o) => o.collection === 'subscriptions'), false); // a data da assinatura continua a mesma
+    assert.equal(updates.length, 0);
+  });
+
+  it('SÓ a data atual: data no passado não gera retroativas nem futuras', async () => {
+    const { deps, committed } = mk();
+    await createSubscription('u1', { ...raw, nextChargeDate: '2026-08-05' }, deps);
+    assert.deepEqual(debtCreates(committed).map((o) => o.data.dueDate), ['2026-08-05']);
+  });
+
+  it('sem devedor, com cartão+devedor (parcela imutável, outro fluxo), pausada ou cancelada: nenhuma dívida à vista é criada', async () => {
+    for (const over of [{ debtorId: undefined }, { status: 'paused' }, { status: 'cancelled' }]) {
+      const { deps, committed } = mk();
+      const r = await createSubscription('u1', { ...raw, ...over }, deps);
+      assert.equal(r.ok, true);
+      assert.equal(r.charge, undefined, JSON.stringify(over));
+      assert.equal(committed.length, 0);
+    }
+  });
+
+  it('dívida já lançada para essa data (não cancelada): não duplica (ação "exists")', async () => {
+    const { deps, committed } = mk({ launched: [debt('sub_new1_2026-12-05', '2026-12-05')] });
+    const r = await createSubscription('u1', raw, deps);
+    assert.deepEqual([r.charge.ok, r.charge.action, committed.length], [true, 'exists', 0]);
+  });
+
+  it('id já usado e CANCELADO (ex.: pausou e retomou): a nova dívida usa uma revisão (_r2), nunca regrava o id', async () => {
+    const { deps, committed } = mk({ launched: [debt('sub_new1_2026-12-05', '2026-12-05', { status: 'cancelled' })] });
+    const r = await createSubscription('u1', raw, deps);
+    assert.equal(r.charge.action, 'launched');
+    assert.equal(debtCreates(committed)[0].docId, 'sub_new1_2026-12-05_r2');
+  });
+
+  it('corrida no lote (id gravado por outra chamada): vira resultado de falha amigável, a assinatura fica salva', async () => {
+    const { deps } = mk({ commit: async () => { throw Object.assign(new Error('denied'), { code: 'permission-denied' }); } });
+    const r = await createSubscription('u1', raw, deps);
+    assert.deepEqual([r.ok, r.charge.ok], [true, false]);
+    assert.match(r.charge.errors._form, /já foi lançada/);
+  });
+
+  it('EDITAR data/valor reagenda a MESMA dívida no servidor (sem criar outra); só valor e só data enviam só o que mudou', async () => {
+    const previous = { id: 's1', status: 'active', debtorId: 'dv', nextChargeDate: '2026-12-05', amountCents: 5590 };
+    const launched = [debt('sub_s1_2026-12-05', '2026-12-05')];
+    const both = mk({ previous, launched });
+    const r = await updateSubscription('u1', 's1', { ...raw, nextChargeDate: '2026-11-06', amountCents: '70,00' }, both.deps);
+    assert.deepEqual([r.ok, r.charge.action, r.charge.date], [true, 'rescheduled', '2026-11-06']);
+    assert.deepEqual(both.calls, [['debt.reschedule', { debtId: 'sub_s1_2026-12-05', dueDate: '2026-11-06', principalCents: 7000 }]]);
+    assert.equal(both.committed.length, 0); // nenhuma dívida nova
+    assert.equal(both.updates.length, 1); // a assinatura foi salva
+    const onlyDate = mk({ previous, launched });
+    await updateSubscription('u1', 's1', { ...raw, nextChargeDate: '2026-11-06' }, onlyDate.deps);
+    assert.deepEqual(onlyDate.calls, [['debt.reschedule', { debtId: 'sub_s1_2026-12-05', dueDate: '2026-11-06' }]]);
+    const onlyAmount = mk({ previous, launched });
+    await updateSubscription('u1', 's1', { ...raw, amountCents: '60,00' }, onlyAmount.deps);
+    assert.deepEqual(onlyAmount.calls, [['debt.reschedule', { debtId: 'sub_s1_2026-12-05', principalCents: 6000 }]]);
+  });
+
+  it('editar outro campo (nome) com a dívida já em dia: nenhuma chamada ao servidor nem lote', async () => {
+    const { deps, calls, committed, updates } = mk({ previous: { id: 's1', status: 'active', debtorId: 'dv', nextChargeDate: '2026-12-05', amountCents: 5590 }, launched: [debt('sub_s1_2026-12-05', '2026-12-05')] });
+    const r = await updateSubscription('u1', 's1', { ...raw, name: 'Netflix 4K' }, deps);
+    assert.deepEqual([r.ok, r.charge.action, calls.length, committed.length, updates.length], [true, 'exists', 0, 0, 1]);
+  });
+
+  it('vínculo NOVO ao editar (nenhum → devedor): lança a dívida da data atual', async () => {
+    const { deps, committed } = mk({ previous: { id: 's1', status: 'active', nextChargeDate: '2026-12-05', amountCents: 5590 } });
+    const r = await updateSubscription('u1', 's1', raw, deps);
+    assert.equal(r.charge.action, 'launched');
+    assert.equal(debtCreates(committed)[0].docId, 'sub_s1_2026-12-05');
+  });
+
+  it('REAGENDAR para uma data em que JÁ existe outra cobrança da assinatura: edição abortada, nada muda', async () => {
+    const { deps, calls, updates } = mk({
+      previous: { id: 's1', status: 'active', debtorId: 'dv', nextChargeDate: '2026-12-05', amountCents: 5590 },
+      launched: [debt('sub_s1_2026-12-05', '2026-12-05'), debt('sub_s1_2026-11-06', '2026-11-06')],
+    });
+    const r = await updateSubscription('u1', 's1', { ...raw, nextChargeDate: '2026-11-06' }, deps);
+    assert.equal(r.ok, false);
+    assert.match(r.errors._form, /06\/11\/2026/);
+    assert.equal(calls.length + updates.length, 0);
+  });
+
+  it('dívida com RECEBIMENTOS não é reagendada: o servidor recusa e a edição inteira é abortada (assinatura não é salva)', async () => {
+    const { deps, updates } = mk({
+      previous: { id: 's1', status: 'active', debtorId: 'dv', nextChargeDate: '2026-12-05', amountCents: 5590 },
+      launched: [debt('sub_s1_2026-12-05', '2026-12-05')], receipts: ['sub_s1_2026-12-05'],
+    });
+    const r = await updateSubscription('u1', 's1', { ...raw, nextChargeDate: '2026-11-06' }, deps);
+    assert.equal(r.ok, false);
+    assert.match(r.errors._form, /recebimentos/);
+    assert.equal(updates.length, 0);
+  });
+
+  it('DESVINCULAR, PAUSAR ou CANCELAR (pela edição) cancela a dívida pendente; com recebimentos ela é mantida e a edição segue', async () => {
+    const previous = { id: 's1', status: 'active', debtorId: 'dv', nextChargeDate: '2026-12-05', amountCents: 5590 };
+    const launched = [debt('sub_s1_2026-12-05', '2026-12-05')];
+    for (const over of [{ debtorId: undefined }, { status: 'paused' }, { status: 'cancelled' }]) {
+      const m = mk({ previous, launched });
+      const r = await updateSubscription('u1', 's1', { ...raw, ...over }, m.deps);
+      assert.deepEqual([r.ok, r.charge.action, m.calls], [true, 'cancelled', [['debt.cancel', { debtId: 'sub_s1_2026-12-05' }]]], JSON.stringify(over));
+      assert.equal(m.updates.length, 1);
+    }
+    const kept = mk({ previous, launched, receipts: ['sub_s1_2026-12-05'] });
+    const r = await updateSubscription('u1', 's1', { ...raw, debtorId: undefined }, kept.deps);
+    assert.deepEqual([r.ok, r.charge.action, kept.updates.length], [true, 'kept', 1]);
+  });
+
+  it('TROCAR de devedor: cancela a dívida do antigo e lança a do novo', async () => {
+    const m = mk({
+      previous: { id: 's1', status: 'active', debtorId: 'dv', nextChargeDate: '2026-12-05', amountCents: 5590 },
+      launched: [debt('sub_s1_2026-12-05', '2026-12-05')],
+    });
+    const r = await updateSubscription('u1', 's1', { ...raw, debtorId: 'dv2' }, m.deps);
+    assert.equal(r.ok, true);
+    assert.deepEqual(m.calls, [['debt.cancel', { debtId: 'sub_s1_2026-12-05' }]]);
+    const created = debtCreates(m.committed)[0];
+    assert.deepEqual([created.data.debtorId, created.data.dueDate], ['dv2', '2026-12-05']);
+  });
+
+  it('STATUS: pausar/cancelar cancela a dívida pendente; retomar lança de novo (id com revisão); cartão não mexe em dívida', async () => {
+    const current = { id: 's1', name: 'Netflix', amountCents: 5590, status: 'active', debtorId: 'dv', nextChargeDate: '2026-12-05' };
+    const launched = [debt('sub_s1_2026-12-05', '2026-12-05')];
+    for (const fn of [pauseSubscription, cancelSubscription]) {
+      const m = mk({ previous: current, launched });
+      const r = await fn('u1', 's1', m.deps);
+      assert.deepEqual([r.ok, r.charge.action, m.calls], [true, 'cancelled', [['debt.cancel', { debtId: 'sub_s1_2026-12-05' }]]]);
+      assert.equal(m.updates[0].data.status, fn === pauseSubscription ? 'paused' : 'cancelled');
+    }
+    const paused = mk({ previous: { ...current, status: 'paused' }, launched: [debt('sub_s1_2026-12-05', '2026-12-05', { status: 'cancelled' })] });
+    const resumed = await resumeSubscription('u1', 's1', paused.deps);
+    assert.equal(resumed.charge.action, 'launched');
+    assert.equal(debtCreates(paused.committed)[0].docId, 'sub_s1_2026-12-05_r2');
+    const card = mk({ previous: { ...current, cardId: 'c1' }, launched });
+    const rc = await pauseSubscription('u1', 's1', card.deps);
+    assert.deepEqual([rc.ok, rc.charge, card.calls.length], [true, undefined, 0]);
+  });
+
+  it('EXCLUIR a assinatura cancela a dívida pendente (com recebimentos, mantém); falha ao cancelar impede a exclusão', async () => {
+    const sub = { id: 's1', name: 'Netflix', amountCents: 5590, status: 'active', debtorId: 'dv', nextChargeDate: '2026-12-05' };
+    const launched = [debt('sub_s1_2026-12-05', '2026-12-05')];
+    const ok = mk({ previous: sub, launched });
+    const r = await deleteSubscription('u1', 's1', ok.deps);
+    assert.deepEqual([r.ok, r.charge.action, ok.calls], [true, 'cancelled', [['debt.cancel', { debtId: 'sub_s1_2026-12-05' }]]]);
+    const kept = mk({ previous: sub, launched, receipts: ['sub_s1_2026-12-05'] });
+    assert.equal((await deleteSubscription('u1', 's1', kept.deps)).charge.action, 'kept');
+    const fail = mk({ previous: sub, launched, finance: async () => ({ ok: false, code: 'NETWORK', errors: { _form: 'sem rede' } }) });
+    const rf = await deleteSubscription('u1', 's1', fail.deps);
+    assert.equal(rf.ok, false);
   });
 });

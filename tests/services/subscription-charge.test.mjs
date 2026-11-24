@@ -5,7 +5,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { registerSubscriptionCharge } from '../../js/services/subscriptions.js';
 import { deleteCategory } from '../../js/services/categories.js';
-import { advanceChargeDate } from '../../js/core/model.js';
+import { advanceChargeDate, chargeAnchorDay } from '../../js/core/model.js';
 import { toFirestoreData } from '../../js/services/firestore.js';
 
 const uid = 'u1';
@@ -47,6 +47,43 @@ describe('advanceChargeDate (puro)', () => {
   it('resultado é gravado em meio-dia UTC pela camada de serviço', () => {
     const { nextChargeDate } = toFirestoreData({ nextChargeDate: advanceChargeDate('2026-11-18', 'monthly') });
     assert.equal(nextChargeDate.toDate().toISOString(), '2026-12-18T12:00:00.000Z');
+  });
+});
+
+describe('advanceChargeDate — dia de cobrança original (VF-COR-09)', () => {
+  const chain = (start, periodicity, steps, anchor) => {
+    const out = [start];
+    for (let i = 0; i < steps; i += 1) out.push(advanceChargeDate(out.at(-1), periodicity, anchor));
+    return out;
+  };
+
+  it('SEM âncora mantém o comportamento anterior (o dia derivado do ajuste fica no menor dia)', () => {
+    assert.deepEqual(chain('2026-01-31', 'monthly', 4), ['2026-01-31', '2026-02-28', '2026-03-28', '2026-04-28', '2026-05-28']);
+  });
+
+  it('COM âncora 31 a assinatura mensal volta ao dia 31 nos meses que o têm', () => {
+    assert.deepEqual(chain('2026-01-31', 'monthly', 5, 31), ['2026-01-31', '2026-02-28', '2026-03-31', '2026-04-30', '2026-05-31', '2026-06-30']);
+    assert.deepEqual(chain('2026-01-30', 'monthly', 3, 30), ['2026-01-30', '2026-02-28', '2026-03-30', '2026-04-30']);
+    assert.deepEqual(chain('2028-01-29', 'monthly', 2, 29), ['2028-01-29', '2028-02-29', '2028-03-29']); // bissexto
+  });
+
+  it('virada de ano e recuperação do dia a partir de uma data já ajustada (28/02 com âncora 31 → 31/03)', () => {
+    assert.equal(advanceChargeDate('2026-12-31', 'monthly', 31), '2027-01-31');
+    assert.equal(advanceChargeDate('2026-02-28', 'monthly', 31), '2026-03-31');
+  });
+
+  it('anual de 29/02 volta a 29/02 nos bissextos; semanal ignora a âncora', () => {
+    assert.deepEqual(chain('2028-02-29', 'yearly', 4, 29), ['2028-02-29', '2029-02-28', '2030-02-28', '2031-02-28', '2032-02-29']);
+    assert.equal(advanceChargeDate('2026-11-24', 'weekly', 31), '2026-12-01');
+  });
+
+  it('âncora inválida (0, 32, 1.5, texto, null) cai no dia da própria data', () => {
+    for (const bad of [0, 32, 1.5, '31', NaN, null, undefined]) assert.equal(advanceChargeDate('2026-01-31', 'monthly', bad), '2026-02-28', String(bad));
+  });
+
+  it('chargeAnchorDay: só dias 29–31 precisam ser lembrados; datas inválidas → null', () => {
+    assert.deepEqual(['2026-01-31', '2026-01-30', '2026-01-29', '2026-01-28', '2026-01-01'].map(chargeAnchorDay), [31, 30, 29, null, null]);
+    for (const bad of ['2026-02-30', 'x', '', null, undefined]) assert.equal(chargeAnchorDay(bad), null);
   });
 });
 
@@ -132,6 +169,7 @@ describe('registerSubscriptionCharge — destinos: cartão, devedor e sem víncu
     const ops = atomic.at(-1);
     const buy = ops.find((o) => o.collection === 'cardPurchases');
     assert.deepEqual([buy.data.debtorId, buy.data.amountCents, buy.data.installmentsTotal], ['dv', 5590, 1]);
+    assert.equal(buy.docId, 'sub_s1_2026-11-05'); // id determinístico: uma compra por assinatura e data
     assert.deepEqual(ops.find((o) => o.collection === 'debtors').increments, { lentCents: 5590 });
     assert.deepEqual(ops.find((o) => o.collection === 'subscriptions'), advance); // avanço da data no MESMO lote
     assert.equal(ops.some((o) => o.collection === 'expenses'), false);
@@ -147,30 +185,45 @@ describe('registerSubscriptionCharge — destinos: cartão, devedor e sem víncu
     assert.equal(ops.some((o) => o.collection === 'debtors'), false);
   });
 
-  it('SÓ DEVEDOR (sem cartão): cria UMA dívida à vista (valor, descrição, vencimento = data da cobrança), soma no emprestado e avança a data no MESMO lote', async () => {
+  it('SÓ DEVEDOR (sem cartão) — "Registrar cobrança" FECHA o ciclo: garante a dívida desta data e lança a da PRÓXIMA fatura, avançando a data no MESMO lote', async () => {
     const { io, atomic, updates } = mk(base({ debtorId: 'dv' }));
     const r = await registerSubscriptionCharge(uid, 's1', io);
-    assert.deepEqual([r.ok, r.via, r.debtorId, r.nextChargeDate, r.generatedExpense], [true, 'debtor', 'dv', '2026-12-05', false]);
-    const ops = atomic.at(-1);
-    const debts = ops.filter((o) => o.collection === 'debts');
-    assert.equal(debts.length, 1);
-    assert.deepEqual(
-      [debts[0].data.debtorId, debts[0].data.principalCents, debts[0].data.description, debts[0].data.installmentsTotal, debts[0].data.status],
-      ['dv', 5590, 'Netflix', 1, 'pending'],
-    );
-    assert.equal(debts[0].data.dueDate, '2026-11-05');
-    assert.deepEqual(ops.find((o) => o.collection === 'debtors').increments, { lentCents: 5590 });
-    assert.deepEqual(ops.find((o) => o.collection === 'subscriptions'), advance); // avanço da data no MESMO lote
-    assert.equal(ops.some((o) => o.collection === 'expenses' || o.collection === 'incomes'), false); // nenhum lançamento em conta
+    assert.deepEqual([r.ok, r.via, r.debtorId, r.nextChargeDate, r.launched, r.generatedExpense], [true, 'debtor', 'dv', '2026-12-05', true, false]);
+    assert.equal(atomic.length, 2);
+    const [thisCycle, next] = atomic;
+    const debts = (batch) => batch.filter((o) => o.collection === 'debts');
+    assert.deepEqual(debts(thisCycle).map((o) => [o.docId, o.data.dueDate, o.data.principalCents]), [['sub_s1_2026-11-05', '2026-11-05', 5590]]);
+    assert.deepEqual(debts(next).map((o) => [o.docId, o.data.dueDate, o.data.principalCents, o.data.description]), [['sub_s1_2026-12-05', '2026-12-05', 5590, 'Netflix']]);
+    assert.equal(thisCycle.some((o) => o.collection === 'subscriptions'), false); // a data só avança junto da dívida da próxima fatura
+    assert.deepEqual(next.find((o) => o.collection === 'subscriptions'), advance);
+    assert.equal(atomic.flat().some((o) => o.collection === 'expenses' || o.collection === 'incomes'), false); // nenhum lançamento em conta
     assert.equal(updates.length, 0);
+  });
+
+  it('CICLO: a dívida desta data já existente não é recriada — só a próxima é lançada e a data avança', async () => {
+    const m = mk(base({ debtorId: 'dv' }));
+    m.io.list = async (u, c) => (c === 'debts' ? [{ id: 'sub_s1_2026-11-05', debtorId: 'dv', dueDate: '2026-11-05', status: 'pending', principalCents: 5590 }] : []);
+    const r = await registerSubscriptionCharge(uid, 's1', m.io);
+    assert.deepEqual([r.ok, r.launched, m.atomic.length], [true, true, 1]);
+    assert.deepEqual(m.atomic[0].filter((o) => o.collection === 'debts').map((o) => o.data.dueDate), ['2026-12-05']);
+  });
+
+  it('CICLO: se a dívida da próxima fatura também já existe, só a data avança (nada é recriado nem somado)', async () => {
+    const m = mk(base({ debtorId: 'dv' }));
+    m.io.list = async (u, c) => (c === 'debts'
+      ? [{ id: 'sub_s1_2026-11-05', debtorId: 'dv', dueDate: '2026-11-05', status: 'pending' }, { id: 'sub_s1_2026-12-05', debtorId: 'dv', dueDate: '2026-12-05', status: 'pending' }]
+      : []);
+    const r = await registerSubscriptionCharge(uid, 's1', m.io);
+    assert.deepEqual([r.ok, r.launched], [true, false]);
+    assert.deepEqual(m.atomic, [[advance]]);
   });
 
   it('CONTA + DEVEDOR (sem cartão): também cria a dívida do devedor; a conta segue só como referência (nenhuma despesa)', async () => {
     const { io, atomic } = mk(base({ accountId: 'a1', debtorId: 'dv' }));
     const r = await registerSubscriptionCharge(uid, 's1', io);
     assert.deepEqual([r.ok, r.via], [true, 'debtor']);
-    assert.equal(atomic.at(-1).filter((o) => o.collection === 'debts').length, 1);
-    assert.equal(atomic.at(-1).some((o) => o.collection === 'expenses'), false);
+    assert.equal(atomic.flat().filter((o) => o.collection === 'debts').length, 2); // desta data + da próxima fatura
+    assert.equal(atomic.flat().some((o) => o.collection === 'expenses'), false);
   });
 
   it('SEM VÍNCULO (só acompanhamento): só avança a data e audita; via "none"; nada financeiro', async () => {
@@ -197,6 +250,25 @@ describe('registerSubscriptionCharge — destinos: cartão, devedor e sem víncu
         assert.equal(r.ok, false, JSON.stringify([subscription.cardId, debtor?.status]));
         assert.equal(atomic.length + updates.length, 0);
       }
+    }
+  });
+
+  it('DUPLICIDADE (cartão): compra da assinatura nessa data já lançada é recusada sem gravar', async () => {
+    const m = mk(base({ cardId: 'c1', debtorId: 'dv' }));
+    const getById = m.io.getById;
+    m.io.getById = async (u, c, id) => (c === 'cardPurchases' && id === 'sub_s1_2026-11-05' ? { id } : getById(u, c, id));
+    const r = await registerSubscriptionCharge(uid, 's1', m.io);
+    assert.equal(r.ok, false);
+    assert.match(r.errors._form, /05\/11\/2026 desta assinatura já foi lançada/);
+    assert.equal(m.atomic.length + m.updates.length, 0);
+  });
+
+  it('CORRIDA no lote (dívida ou compra): outra chamada gravou o mesmo id antes → "já lançada", nada duplicado', async () => {
+    for (const subscription of [base({ debtorId: 'dv' }), base({ cardId: 'c1', debtorId: 'dv' })]) {
+      const raced = mk(subscription);
+      raced.io.commitAtomic = async () => { throw Object.assign(new Error('denied'), { code: 'permission-denied' }); };
+      const r = await registerSubscriptionCharge(uid, 's1', raced.io);
+      assert.deepEqual([r.ok, /já foi lançada/.test(r.errors._form)], [false, true]);
     }
   });
 });
