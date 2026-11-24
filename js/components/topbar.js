@@ -24,7 +24,7 @@ export function mountTopbar(root, { title, user, onMenuClick } = {}) {
     }),
   ]);
 
-  const logout = el('button', { type: 'button', class: 'btn btn--ghost', title: 'Sair' });
+  const logout = el('button', { type: 'button', class: 'btn btn--ghost', title: 'Sair', 'aria-label': 'Sair' });
   logout.innerHTML = '<i data-lucide="log-out" aria-hidden="true"></i><span>Sair</span>';
   logout.addEventListener('click', async () => {
     await signOut();

@@ -36,8 +36,7 @@ export function mountSidebar(root, { activeId } = {}) {
 
   const collapseButton = el('button', {
     type: 'button',
-    class: 'btn btn--ghost',
-    style: 'width:100%;justify-content:flex-start;gap:12px',
+    class: 'btn btn--ghost sidebar__collapse',
     'aria-label': 'Recolher ou expandir o menu',
   });
   collapseButton.innerHTML =

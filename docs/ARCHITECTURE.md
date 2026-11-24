@@ -19,7 +19,7 @@ Uma camada só importa as da direita/abaixo. Nunca o contrário.
 |---|---|---|---|
 | Páginas | `pages/`, `index.html` | Casca HTML; carrega `app.js`/`auth-page.js` | — |
 | Módulos | `js/modules/` | Uma tela por arquivo: estado da tela, renderização, eventos | components, services, core, utils |
-| Componentes | `js/components/` | Elementos visuais reutilizáveis (`dom.js`, `form-kit.js`, modal, tabela…) | core, utils |
+| Componentes | `js/components/` | Elementos visuais reutilizáveis (`dom.js`, `form-kit.js`, modal, tabela…). `table-tools.js` dá **ordenação por cabeçalho e filtro de texto a TODA `table.table`** (páginas e modais), automaticamente | core, utils |
 | Services | `js/services/` | Casos de uso: CRUD, regras com dados, auditoria, chamadas `/api/*` | core, utils, firebase |
 | Core | `js/core/` | Domínio **puro** (sem DOM/rede/Firebase): modelo, agregados, previsão, esquemas de importação | utils |
 | Utils | `js/utils/` | Funções genéricas puras: `money`, `dates`, `csv`, `zip`, `constants`… | — |

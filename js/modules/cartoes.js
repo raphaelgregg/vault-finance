@@ -339,6 +339,7 @@ async function openInvoicesModal(card, { showCancelled = false } = {}) {
     : emptyBlock('shopping-cart', 'Sem compras', 'Lance uma compra para vê-la aqui.');
 
   openModal({
+    size: 'wide',
     title: `Faturas e compras — ${card.name}`,
     body: el('div', {}, [el('h3', { text: 'Faturas' }), card.status === 'active' ? el('button', { type: 'button', class: 'btn btn--secondary', onClick: openConsolidation, text: 'Lançar consolidado' }) : null, toggleCancelled, invoiceTable, el('h3', { text: 'Compras (parcelas)' }), purchaseTable]),
     footer: [el('button', { type: 'button', class: 'btn btn--secondary', onClick: closeModal, text: 'Fechar' })],

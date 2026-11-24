@@ -153,7 +153,7 @@ O workflow `.github/workflows/ci.yml` roda lint, unit e Rules (Node 24 e 26, LTS
 │   ├── core/                   # domínio PURO (sem DOM/rede): model.js (barrel) + model/ (schemas, validation, ledger, subscriptions, debtors, goals, cards), aggregates.js, forecast.js, integrity.js, importSchema.js; guard.js (sessão)
 │   ├── firebase/               # config.js (placeholders), client.js (SDK + emuladores)
 │   ├── services/               # firestore.js (CRUD, lote atômico, auditoria) + um service por módulo
-│   ├── components/             # dom.js (el/$/toast), sidebar, topbar, tema, card, tabela, modal, vazio, form-kit (formulários)
+│   ├── components/             # dom.js (el/$/toast), sidebar, topbar, tema, modal, form-kit (formulários/dataTable), table-tools (ordenação e filtro de tabelas)
 │   ├── modules/                # um módulo por página (+ devedores-parcelas.js)
 │   └── utils/                  # constants, money (centavos: parse/format), dates, csv, zip, nav… (puros)
 ├── api/                        # funções Vercel (finance, validation, admin-claims): só adaptam req/res

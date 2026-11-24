@@ -10,12 +10,18 @@ import { COLLECTIONS } from '../utils/constants.js';
 import { list } from './firestore.js';
 import {
   summarizeDebtors, formatCents, cardInvoicesSummary, allocateLinkedGoalBalances,
+  accountLabel, ACCOUNT_TYPES, cardLimitUsage, debtorPendingCents, summarizeSubscriptions, subscriptionMonthlyCents,
 } from '../core/model.js';
 import { loadDebtorStatements } from './debtors.js';
-import { monthBounds, todayInAppZone } from '../utils/dates.js';
+import { monthBounds, todayInAppZone, resolvePeriod } from '../utils/dates.js';
 import { loadBalances, READ_LIMIT } from './balances.js';
 import {
-  monthResult,
+  periodResult,
+  periodSeries,
+  accountsOverview,
+  cardsOverview,
+  debtorsOverview,
+  subscriptionsOverview,
   monthForecast,
   totalBalanceCents,
   upcomingDue,
@@ -38,15 +44,22 @@ export const DASHBOARD_SOURCES = Object.freeze([
   'goals', 'monthPending', 'cardInvoices', 'debtorMonth', 'monthlyForecast',
 ]);
 
+const ACCOUNT_TYPE_LABELS = Object.fromEntries(ACCOUNT_TYPES.map((t) => [t.value, t.label]));
+
 /**
- * Retorna { totalBalanceCents, month, result, upcoming, budgets, debtors, truncated, accountCount, failed }.
+ * Retorna { period, totalBalanceCents, month, result, series, upcoming, budgets, debtors, truncated, accountCount, failed, ... }.
+ * `io.period` = { mode: 'month'|'semester'|'year'|'all', month, year, semester } (padrão: `io.month`, ou o mês vigente).
+ * O PERÍODO governa receitas × despesas (realizado e previsto pendente) e a série mensal. `month` (mês de referência =
+ * mês escolhido no modo mês; senão o vigente) governa o que é mensal por natureza: orçamentos, faturas do mês,
+ * previsão de caixa e a receber de devedores. Contas, cartões, devedores e assinaturas são a situação ATUAL.
  * Fonte que falha → campo `null` (saldo/resultado/orçamentos/devedores) ou ausente de `upcoming`, e a
  * fonte entra em `failed` (a UI mostra aviso explícito). Coleção vazia não é falha (zeros).
  */
 export async function loadDashboard(uid, io = {}) {
   const fetchList = io.list ?? list;
   const { today, month: currentMonth } = todayParts(io.now ? io.now() : new Date());
-  const month = io.month ?? currentMonth; // mês selecionado (padrão: vigente)
+  const period = resolvePeriod(io.period ?? { mode: 'month', month: io.month }, currentMonth);
+  const month = period.month ?? currentMonth; // mês de referência (padrão: vigente)
   const bounds = monthBounds(month);
   const capped = (collection, extra = {}) => fetchList(uid, collection, { limit: READ_LIMIT, ...extra });
   const failed = [];
@@ -65,20 +78,21 @@ export async function loadDashboard(uid, io = {}) {
     attempt('pendingExpenses', () => fetchList(uid, COLLECTIONS.expenses, {
       where: [['status', '==', 'pending'], ['dueDate', '>=', today]], orderBy: ['dueDate', 'asc'], limit: SHORT_LIMIT,
     }), []),
-    attempt('subscriptions', () => fetchList(uid, COLLECTIONS.subscriptions, {
-      where: [['status', '==', 'active']], orderBy: ['nextChargeDate', 'asc'], limit: SHORT_LIMIT,
-    }), []),
+    attempt('subscriptions', () => capped(COLLECTIONS.subscriptions, {
+      where: [['status', '==', 'active']], orderBy: ['nextChargeDate', 'asc'],
+    }), null),
     attempt('invoices', () => fetchList(uid, COLLECTIONS.invoices, {
       where: [['status', '==', 'closed']], orderBy: ['dueDate', 'asc'], limit: SHORT_LIMIT,
     }), []),
     attempt('debtors', () => capped(COLLECTIONS.debtors), null),
     attempt('budgets', () => getBudgetProgress(uid, month, { list: fetchList }), null),
     attempt('goals', () => capped(COLLECTIONS.goals), null),
-    // Previsto do mês: pendentes com data prevista no mês (índices status+data já declarados).
+    // Previsto do período: pendentes com data prevista no intervalo (índices status+data já declarados; "todo o período" = todos os pendentes).
     attempt('monthPending', async () => {
+      const range = (field) => [['status', '==', 'pending'], ...(period.start ? [[field, '>=', period.start]] : []), ...(period.end ? [[field, '<=', period.end]] : [])];
       const [incomes, expenses] = await Promise.all([
-        capped(COLLECTIONS.incomes, { where: [['status', '==', 'pending'], ['expectedDate', '>=', bounds.start], ['expectedDate', '<=', bounds.end]], orderBy: ['expectedDate', 'asc'] }),
-        capped(COLLECTIONS.expenses, { where: [['status', '==', 'pending'], ['dueDate', '>=', bounds.start], ['dueDate', '<=', bounds.end]], orderBy: ['dueDate', 'asc'] }),
+        capped(COLLECTIONS.incomes, { where: range('expectedDate'), orderBy: ['expectedDate', 'asc'] }),
+        capped(COLLECTIONS.expenses, { where: range('dueDate'), orderBy: ['dueDate', 'asc'] }),
       ]);
       return { incomes, expenses };
     }, null),
@@ -106,12 +120,15 @@ export async function loadDashboard(uid, io = {}) {
     linkedCents = [...allocateLinkedGoalBalances(goals, activeBalances, txCounts).values()].reduce((t, v) => t + v, 0);
   }
   const totalCents = loaded ? totalBalanceCents(accounts, loaded.balances) : null;
-  const result = loaded ? monthResult(loaded.movements.incomes, loaded.movements.expenses, month) : null;
+  const result = loaded ? periodResult(loaded.movements.incomes, loaded.movements.expenses, period.start, period.end) : null;
+  const series = loaded ? periodSeries(loaded.movements.incomes, loaded.movements.expenses, period) : null;
 
   // A receber de devedores no mês (fechamento) — depende da lista de devedores.
+  const debtorMonthById = new Map(); // devedor → a receber no mês (fechamento)
   const debtorMonth = debtors
     ? await attempt('debtorMonth', async () => {
       const map = await loadDebtorStatements(uid, debtors, month, { list: fetchList });
+      for (const [id, st] of map) debtorMonthById.set(id, st.totalCents);
       return [...map.values()].reduce((t, st) => t + st.totalCents, 0);
     }, null)
     : null;
@@ -124,7 +141,26 @@ export async function loadDashboard(uid, io = {}) {
     }, { list: fetchList }), null)
     : null;
 
+  const cardsView = cardInvoices
+    ? cardsOverview({ cards: cardInvoices.cards, invoices: cardInvoices.invoices, purchases: cardInvoices.purchases, today, usedFn: cardLimitUsage })
+    : null;
+  const debtorsSummary = debtors ? summarizeDebtors(debtors) : null;
+  // Posição líquida = saldo das contas + a receber de devedores − faturas de cartão ainda não pagas (só com as três fontes).
+  const netPositionCents = totalCents !== null && debtorsSummary && cardsView
+    ? totalCents + debtorsSummary.pendingCents - cardsView.dueCents
+    : null;
+
   return {
+    period,
+    series,
+    accounts: loaded ? accountsOverview(accounts, loaded.balances, accountLabel, ACCOUNT_TYPE_LABELS) : null,
+    cardsView,
+    debtorsList: debtors
+      ? debtorsOverview(debtors, debtorPendingCents).map((d) => ({ ...d, monthDueCents: debtorMonth === null ? null : (debtorMonthById.get(d.id) ?? 0) }))
+      : null,
+    subscriptionsList: subscriptions ? subscriptionsOverview(subscriptions, subscriptionMonthlyCents) : null,
+    subscriptionsSummary: subscriptions ? summarizeSubscriptions(subscriptions) : null,
+    netPositionCents,
     month,
     isCurrentMonth: month === currentMonth,
     accountCount: accounts ? accounts.filter((a) => a.status === 'active').length : null,
@@ -135,7 +171,7 @@ export async function loadDashboard(uid, io = {}) {
     monthlyForecast: monthlyForecastData,
     forecast: result && monthPending ? monthForecast(result, monthPending.incomes, monthPending.expenses) : null,
     cardInvoices: cardInvoices ? cardInvoicesSummary({ ...cardInvoices, month }) : null,
-    upcoming: upcomingDue({ expenses: pendingExpenses, subscriptions, invoices, today }),
+    upcoming: upcomingDue({ expenses: pendingExpenses, subscriptions: subscriptions ?? [], invoices, today }),
     budgets: budgets ? budgets.summary : null,
     debtors: debtors ? { ...summarizeDebtors(debtors), monthDueCents: debtorMonth } : null,
     truncated: [...(loaded?.truncated ?? []), ...(budgets?.truncated ? ['budgetExpenses'] : []), ...(cardInvoices?.truncated ? ['cardInvoices'] : []), ...(monthlyForecastData?.truncated ?? [])],
