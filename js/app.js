@@ -12,6 +12,7 @@ import { mountTopbar } from './components/topbar.js';
 import { navItemById } from './utils/nav.js';
 import { $, toast, refreshIcons } from './components/dom.js';
 import { startTableTools } from './components/table-tools.js';
+import { mountBottomNav } from './components/bottom-nav.js';
 import { registerPwa } from './pwa.js';
 
 registerPwa();
@@ -61,6 +62,12 @@ async function bootstrap() {
     onMenuClick: () => sidebar.toggleMobile(),
   });
 
+  const bottomNav = document.createElement('nav');
+  bottomNav.className = 'bottom-nav';
+  bottomNav.setAttribute('aria-label', 'Atalhos');
+  document.querySelector('.app').append(bottomNav);
+  mountBottomNav(bottomNav, { activeId: pageId, onMore: () => sidebar.toggleMobile() });
+
   const loadModule = MODULES[pageId];
   if (!loadModule) {
     $('#page-content').textContent = 'Página não encontrada.';
@@ -70,8 +77,13 @@ async function bootstrap() {
   try {
     const module = await loadModule();
     startTableTools(); // ordenação e filtro em todas as tabelas (páginas e modais)
-    module.render($('#page-content'), { user });
+    await module.render($('#page-content'), { user });
     refreshIcons();
+    // "Lançar" na barra inferior abre a página já com o formulário de criação (#novo).
+    if (location.hash === '#novo') {
+      history.replaceState(null, '', location.pathname + location.search);
+      $('#page-content .btn--primary')?.click();
+    }
   } catch (error) {
     console.error('[app] falha ao carregar módulo', error);
     $('#page-content').replaceChildren(

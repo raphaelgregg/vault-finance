@@ -165,9 +165,7 @@
 .table th {
   color: var(--text-muted);
   font-weight: 600;
-  font-size: var(--fs-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-size: var(--fs-sm);
   background: var(--surface-2);
 }
 

@@ -421,6 +421,7 @@ try {
   await go('dashboard');
   await waitText(/Previsão do mês/);
   assert.match(await content(), /Saldo projetado ao fim do mês/);
+  await page.locator('#dashboard-forecast-details > summary').click(); // detalhes recolhidos por padrão
   assert.match(await content(), /Como o saldo projetado foi calculado/);
   assert.match(await content(), /Compromissos dos próximos meses/);
   await page.locator('#include-debtors').check();

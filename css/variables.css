@@ -7,6 +7,8 @@
   --brand-600: #17624a;
   --brand-100: #d9f2e7;
 
+  --hero-bg: #17624a; /* faixa principal do dashboard e painel do login */
+
   /* Superfícies e texto (tema claro) */
   --bg: #f4f6f8;
   --surface: #ffffff;
@@ -17,7 +19,7 @@
   --text-inverse: #ffffff;
 
   /* Semânticas financeiras */
-  --income: #1f8a5b;
+  --income: #17794f; /* contraste ≥ 4.5:1 sobre branco; o sinal ▲/▼ no valor não depende só da cor */
   --income-soft: #e2f5ec;
   --expense: #c0392b;
   --expense-soft: #fbe7e4;
@@ -34,7 +36,7 @@
   --space-7: 48px;
 
   /* Tipografia */
-  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --fs-xs: 12px;
   --fs-sm: 13px;
   --fs-md: 15px;
@@ -71,6 +73,7 @@
   --brand-500: #3aa981;
   --brand-600: #2c8b69;
   --brand-100: #1d3b31;
+  --hero-bg: #1b4d3d;
   --income: #4cc38a;
   --income-soft: #16332a;
   --expense: #f0736a;
@@ -79,7 +82,6 @@
   --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.45);
 }
 
-/* Respeita preferência do sistema quando o usuário não escolheu tema */
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;
