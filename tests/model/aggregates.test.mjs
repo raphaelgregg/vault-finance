@@ -219,3 +219,21 @@ describe('cardsOverview — fatura a pagar não soma meses futuros (Mercado Pago
     assert.equal(rows[0].overdue, true);
   });
 });
+
+describe('cardMonthInvoice — fatura do cartão no mês', () => {
+  it('aberta soma parcelas, fechada usa total, paga usa paidCents, cancelada/sem fatura = null', async () => {
+    const { cardMonthInvoice } = await import('../../js/core/model.js');
+    const purchases = [{ invoiceId: 'a', amountCents: 1000 }, { invoiceId: 'a', amountCents: 550 }, { invoiceId: 'b', amountCents: 9 }];
+    const invoices = [
+      { id: 'a', referenceMonth: '2026-12', status: 'open', dueDate: '2026-12-17' },
+      { id: 'b', referenceMonth: '2027-01', status: 'closed', totalCents: 777, dueDate: '2027-01-17' },
+      { id: 'c', referenceMonth: '2027-02', status: 'paid', totalCents: 500, paidCents: 480, dueDate: '2027-02-17' },
+      { id: 'd', referenceMonth: '2027-03', status: 'cancelled', totalCents: 1 },
+    ];
+    assert.deepEqual(cardMonthInvoice(invoices, purchases, '2026-12'), { invoiceId: 'a', status: 'open', totalCents: 1550, dueDate: '2026-12-17' });
+    assert.equal(cardMonthInvoice(invoices, purchases, '2027-01').totalCents, 777);
+    assert.equal(cardMonthInvoice(invoices, purchases, '2027-02').totalCents, 480);
+    assert.equal(cardMonthInvoice(invoices, purchases, '2027-03'), null);
+    assert.equal(cardMonthInvoice(invoices, purchases, '2030-01'), null);
+  });
+});

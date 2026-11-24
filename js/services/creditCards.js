@@ -206,6 +206,12 @@ export async function getCardLimitUsage(uid, cardId, io = {}) {
   return { usedCents, availableCents };
 }
 
+/** Como `getCardLimitUsage`, mais as faturas e compras lidas (a tela de Cartões deriva a fatura do mês sem reler). */
+export async function getCardUsageDetails(uid, card, io = {}) {
+  const { usedCents, availableCents, invoices, purchases } = await usageOf(uid, card, io);
+  return { usedCents, availableCents, invoices, purchases };
+}
+
 /**
  * Lança compra (parcelada ou não) em cartão ATIVO. `rawData`: { description, amountCents (TOTAL),
  * purchaseDate, installmentsTotal (padrão 1), categoryId?, notes? }.

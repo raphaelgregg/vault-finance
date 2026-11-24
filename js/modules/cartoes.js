@@ -24,13 +24,13 @@ import {
   listCards, createCard, updateCard, deleteCard, blockCard, unblockCard, cancelCard,
   registerCardPurchase, registerInvoiceConsolidation, consolidationDeltaCents, parseMoneyToCents,
   deleteCardPurchase, updateCardPurchase, closeInvoice, payInvoice, cancelInvoice, deleteInvoice,
-  listInvoices, listCardPurchases, getCardLimitUsage, getCardStatusOptions, getInvoiceStatusOptions, formatCents,
+  listInvoices, listCardPurchases, getCardUsageDetails, getCardStatusOptions, getInvoiceStatusOptions, formatCents,
 } from '../services/creditCards.js';
 import { listAccounts } from '../services/accounts.js';
 import { listCategories } from '../services/categories.js';
 import { listOpenDebtors } from '../services/debtors.js';
 import { describeError } from '../utils/errors.js';
-import { invoiceTotalCents, debtorPendingCents, accountLabel as accountText } from '../core/model.js';
+import { invoiceTotalCents, debtorPendingCents, cardMonthInvoice, accountLabel as accountText } from '../core/model.js';
 import { newOperationId } from '../services/financeApi.js';
 import { openReversalModal } from '../components/reversal-modal.js';
 
@@ -44,6 +44,7 @@ let usage = new Map();
 let accounts = [];
 let categories = [];
 let openDebtors = [];
+let selectedMonth = null; // mês da fatura exibida na tabela; null = mês vigente
 let debtorsFailed = null; // mensagem de diagnóstico quando a leitura falha
 
 export async function render(target, ctx) {
@@ -69,7 +70,7 @@ async function loadOpenDebtors() {
 
 async function reload() {
   cards = await listCards(user.uid);
-  const entries = await Promise.all(cards.map(async (c) => [c.id, await getCardLimitUsage(user.uid, c.id)]));
+  const entries = await Promise.all(cards.map(async (c) => [c.id, await getCardUsageDetails(user.uid, c)]));
   usage = new Map(entries);
   renderPage();
 }
@@ -88,7 +89,13 @@ function renderPage() {
     icon: 'credit-card', title: 'Cartões de crédito', hint: 'Limites, compras parceladas e faturas.',
     actionLabel: 'Novo cartão', onAction: () => openCardModal(),
   });
+  const month = selectedMonth ?? currentMonthKey();
+  const monthInvoice = (c) => cardMonthInvoice(usage.get(c.id)?.invoices ?? [], usage.get(c.id)?.purchases ?? [], month);
+  const monthRows = live.map(monthInvoice).filter(Boolean);
+  const toPay = monthRows.filter((i) => i.status === 'open' || i.status === 'closed').reduce((t, i) => t + i.totalCents, 0);
+  const paid = monthRows.filter((i) => i.status === 'paid').reduce((t, i) => t + i.totalCents, 0);
   const stats = el('div', { class: 'grid grid--cards' }, [
+    statCard(`Faturas de ${formatMonth(month)}`, formatCents(toPay), 'receipt', `A pagar (abertas e fechadas) · já pagas ${formatCents(paid)}`, toPay > 0 ? 'expense' : undefined),
     statCard('Limite total', formatCents(limit), 'credit-card', `${live.length} cartão(ões) não cancelado(s)`),
     statCard('Utilizado', formatCents(used), 'receipt', 'Compras em faturas ainda não pagas', 'expense'),
     statCard('Disponível', formatCents(Math.max(0, limit - used)), 'wallet', 'Limite − utilizado'),
@@ -99,6 +106,9 @@ function renderPage() {
     { key: 'limitCents', label: 'Limite', numeric: true, render: (v) => formatCents(v) },
     { key: 'used', label: 'Utilizado', numeric: true, render: (_, c) => formatCents(usage.get(c.id)?.usedCents ?? 0) },
     { key: 'available', label: 'Disponível', numeric: true, render: (_, c) => formatCents(usage.get(c.id)?.availableCents ?? 0) },
+    { key: 'monthInvoice', label: `Fatura ${formatMonth(month)}`, numeric: true, render: (_, c) => { const i = monthInvoice(c); return i ? formatCents(i.totalCents) : '—'; } },
+    { key: 'monthDue', label: 'Vencimento', render: (_, c) => { const i = monthInvoice(c); return i?.dueDate ? formatDate(i.dueDate) : '—'; } },
+    { key: 'monthStatus', label: 'Situação', render: (_, c) => { const i = monthInvoice(c); return i ? optionLabel(getInvoiceStatusOptions(), i.status) : 'Sem fatura'; } },
     { key: 'closingDay', label: 'Fecha dia', numeric: true },
     { key: 'dueDay', label: 'Vence dia', numeric: true },
     { key: 'status', label: 'Status', render: (v) => optionLabel(getCardStatusOptions(), v) },
@@ -107,7 +117,20 @@ function renderPage() {
     ? dataTable({ columns, rows: cards, actions: cardActions })
     : emptyBlock('credit-card', 'Nenhum cartão cadastrado', 'Cadastre um cartão para lançar compras e acompanhar faturas.');
 
-  container.replaceChildren(header, stats, el('section', { class: 'panel' }, [
+  const monthInput = el('input', {
+    type: 'month', id: 'cards-month', value: month, 'aria-label': 'Mês das faturas',
+    onChange: (event) => {
+      if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(event.target.value)) return;
+      selectedMonth = event.target.value;
+      renderPage();
+    },
+  });
+  const monthBar = el('div', { class: 'toolbar', role: 'group', 'aria-label': 'Mês das faturas' }, [
+    el('div', { class: 'form__field' }, [el('label', { for: 'cards-month', text: 'Mês das faturas' }), monthInput]),
+    el('p', { class: 'card__hint', text: `Exibindo as faturas de ${formatMonth(month)} (MM/AAAA).` }),
+  ]);
+
+  container.replaceChildren(header, monthBar, stats, el('section', { class: 'panel' }, [
     el('div', { class: 'panel__header' }, [el('h2', { text: 'Meus cartões' })]),
     el('div', { class: 'panel__body panel__body--flush' }, [table]),
   ]));

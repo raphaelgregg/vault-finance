@@ -52,6 +52,20 @@ try {
   assert.equal(await dialog.locator('tbody tr', { hasText: 'Sofá novo' }).count(), 1, 'só a parcela corrigida muda de descrição');
   assert.equal(await dialog.locator('tbody tr', { hasText: 'Sofá' }).count(), 3, 'as 3 parcelas continuam');
 
+  log('Cartões: seletor de mês mostra a fatura do mês (valor, vencimento e situação)');
+  await page.keyboard.press('Escape');
+  await page.fill('#cards-month', '2027-01');
+  await page.dispatchEvent('#cards-month', 'change');
+  const cardRow = page.locator('#page-content tbody tr', { hasText: 'Banco Brasil' }).first();
+  await page.waitForFunction(() => /Fatura 01\/2027/.test(document.querySelector('#page-content').innerText));
+  assert.match(await cardRow.innerText(), /R\$\s?1\.035,97/); // 735,97 (compra corrigida) + 300,00 (3ª parcela do sofá)
+  assert.match(await cardRow.innerText(), /17\/01\/2027/);
+  assert.match(await cardRow.innerText(), /Aberta/);
+  await page.fill('#cards-month', '2026-06');
+  await page.dispatchEvent('#cards-month', 'change');
+  await page.waitForFunction(() => /Fatura 06\/2026/.test(document.querySelector('#page-content').innerText));
+  assert.match(await cardRow.innerText(), /Sem fatura/);
+
   log('limite usado não muda com a correção (735,97 + 900,00)');
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => /R\$\s?3\.364,03/.test(document.querySelector('#page-content').innerText)); // 5000 − 1635,97
