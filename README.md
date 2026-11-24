@@ -189,7 +189,7 @@ isolamento nas Rules.
 | `incomes` | receitas | `description`, `categoryId`, `amountCents`, `expectedDate`, `accountId`, `status`, `recurrence` |
 | `expenses` | despesas | `description`, `categoryId`, `amountCents`, `accountId`, `purchaseDate`, `dueDate`, `status`, `recurrence` |
 | `transfers` | transferências | `fromAccountId`, `toAccountId`, `amountCents`, `date`, `reason`, `status` |
-| `subscriptions` | assinaturas | `name`, `amountCents`, `periodicity`, `nextChargeDate`, `categoryId`, `status` (opcionais: `accountId`, `cardId`, `debtorId`) |
+| `subscriptions` | assinaturas | `name`, `amountCents`, `periodicity`, `nextChargeDate`, `categoryId`, `status` (opcionais: `accountId`, `cardId`, `debtorId`, `chargeDay` = dia 29–31 original da cobrança) |
 | `debtors` | devedores | `name`, `loanDate`, `lentCents`, `receivedCents`, `status` |
 | `debts` | parcelas de dívida | `debtorId`, `description`, `principalCents`, `dueDate`, `installmentNumber`, `status` |
 | `debtPayments` | recebimentos | `debtId`, `debtorId`, `amountCents`, `date`, `accountId` |

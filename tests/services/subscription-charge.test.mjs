@@ -5,7 +5,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { registerSubscriptionCharge } from '../../js/services/subscriptions.js';
 import { deleteCategory } from '../../js/services/categories.js';
-import { advanceChargeDate } from '../../js/core/model.js';
+import { advanceChargeDate, chargeAnchorDay } from '../../js/core/model.js';
 import { toFirestoreData } from '../../js/services/firestore.js';
 
 const uid = 'u1';
@@ -47,6 +47,43 @@ describe('advanceChargeDate (puro)', () => {
   it('resultado é gravado em meio-dia UTC pela camada de serviço', () => {
     const { nextChargeDate } = toFirestoreData({ nextChargeDate: advanceChargeDate('2026-11-18', 'monthly') });
     assert.equal(nextChargeDate.toDate().toISOString(), '2026-12-18T12:00:00.000Z');
+  });
+});
+
+describe('advanceChargeDate — dia de cobrança original (VF-COR-09)', () => {
+  const chain = (start, periodicity, steps, anchor) => {
+    const out = [start];
+    for (let i = 0; i < steps; i += 1) out.push(advanceChargeDate(out.at(-1), periodicity, anchor));
+    return out;
+  };
+
+  it('SEM âncora mantém o comportamento anterior (o dia derivado do ajuste fica no menor dia)', () => {
+    assert.deepEqual(chain('2026-01-31', 'monthly', 4), ['2026-01-31', '2026-02-28', '2026-03-28', '2026-04-28', '2026-05-28']);
+  });
+
+  it('COM âncora 31 a assinatura mensal volta ao dia 31 nos meses que o têm', () => {
+    assert.deepEqual(chain('2026-01-31', 'monthly', 5, 31), ['2026-01-31', '2026-02-28', '2026-03-31', '2026-04-30', '2026-05-31', '2026-06-30']);
+    assert.deepEqual(chain('2026-01-30', 'monthly', 3, 30), ['2026-01-30', '2026-02-28', '2026-03-30', '2026-04-30']);
+    assert.deepEqual(chain('2028-01-29', 'monthly', 2, 29), ['2028-01-29', '2028-02-29', '2028-03-29']); // bissexto
+  });
+
+  it('virada de ano e recuperação do dia a partir de uma data já ajustada (28/02 com âncora 31 → 31/03)', () => {
+    assert.equal(advanceChargeDate('2026-12-31', 'monthly', 31), '2027-01-31');
+    assert.equal(advanceChargeDate('2026-02-28', 'monthly', 31), '2026-03-31');
+  });
+
+  it('anual de 29/02 volta a 29/02 nos bissextos; semanal ignora a âncora', () => {
+    assert.deepEqual(chain('2028-02-29', 'yearly', 4, 29), ['2028-02-29', '2029-02-28', '2030-02-28', '2031-02-28', '2032-02-29']);
+    assert.equal(advanceChargeDate('2026-11-24', 'weekly', 31), '2026-12-01');
+  });
+
+  it('âncora inválida (0, 32, 1.5, texto, null) cai no dia da própria data', () => {
+    for (const bad of [0, 32, 1.5, '31', NaN, null, undefined]) assert.equal(advanceChargeDate('2026-01-31', 'monthly', bad), '2026-02-28', String(bad));
+  });
+
+  it('chargeAnchorDay: só dias 29–31 precisam ser lembrados; datas inválidas → null', () => {
+    assert.deepEqual(['2026-01-31', '2026-01-30', '2026-01-29', '2026-01-28', '2026-01-01'].map(chargeAnchorDay), [31, 30, 29, null, null]);
+    for (const bad of ['2026-02-30', 'x', '', null, undefined]) assert.equal(chargeAnchorDay(bad), null);
   });
 });
 
@@ -215,5 +252,24 @@ describe('registerSubscriptionCharge — destinos: cartão, devedor e sem víncu
     raced.io.commitAtomic = async () => { throw Object.assign(new Error('denied'), { code: 'permission-denied' }); };
     const r = await registerSubscriptionCharge(uid, 's1', raced.io);
     assert.deepEqual([r.ok, /já foi lançada/.test(r.errors._form)], [false, true]);
+  });
+});
+
+describe('registerSubscriptionCharge — usa o dia original (VF-COR-09)', () => {
+  const run = async (current) => {
+    const { io, calls } = makeIo(current);
+    const r = await registerSubscriptionCharge(uid, 's1', io);
+    return { r, calls };
+  };
+
+  it('assinatura do dia 31 já ajustada para 28/02 volta ao dia 31 em março', async () => {
+    const { r, calls } = await run(sub({ nextChargeDate: '2026-02-28', chargeDay: 31 }));
+    assert.equal(r.nextChargeDate, '2026-03-31');
+    assert.deepEqual(calls.update, [{ c: 'subscriptions', id: 's1', data: { nextChargeDate: '2026-03-31' } }]);
+  });
+
+  it('assinatura antiga (sem chargeDay) segue como antes', async () => {
+    const { r } = await run(sub({ nextChargeDate: '2026-02-28' }));
+    assert.equal(r.nextChargeDate, '2026-03-28');
   });
 });

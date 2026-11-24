@@ -19,6 +19,7 @@ import {
   SUBSCRIPTION_PERIODICITIES,
   SUBSCRIPTION_STATUSES,
   advanceChargeDate,
+  chargeAnchorDay,
   centsToMoneyString,
   summarizeSubscriptions,
   formatCents,
@@ -57,7 +58,10 @@ export async function getSubscription(uid, subscriptionId) {
 
 /** Modelo → categoria real no Firestore → compatibilidade de tipo. */
 async function validate(uid, rawData, deps) {
-  const { ok, data, errors } = buildEntity('subscriptions', rawData);
+  // `chargeDay` nunca vem do formulário: é derivado da data escolhida (só dias 29–31, que o fim do mês pode apagar).
+  const { chargeDay: _ignored, ...input } = rawData ?? {};
+  const anchor = chargeAnchorDay(input.nextChargeDate);
+  const { ok, data, errors } = buildEntity('subscriptions', anchor ? { ...input, chargeDay: anchor } : input);
   if (!ok) return { ok: false, errors };
   if (data.cardId) {
     // Cobrada no cartão: o cartão precisa existir e não estar cancelado (VF-2-03r).
@@ -100,6 +104,7 @@ export async function updateSubscription(uid, subscriptionId, rawData, deps = {}
     accountId: checked.data.accountId ?? null,
     cardId: checked.data.cardId ?? null,
     debtorId: checked.data.debtorId ?? null,
+    chargeDay: checked.data.chargeDay ?? null,
   }, deps);
   const newLink = checked.data.debtorId && checked.data.debtorId !== previous?.debtorId && checked.data.status === 'active';
   const charge = newLink ? await chargeAfterSave(uid, { id: subscriptionId, ...checked.data }, deps) : null;
@@ -153,7 +158,7 @@ async function chargeSubscription(uid, current, io = {}) {
   if (current.status !== 'active') {
     return { ok: false, errors: { _form: 'Só é possível registrar cobrança de assinaturas ativas.' } };
   }
-  const nextChargeDate = advanceChargeDate(current.nextChargeDate, current.periodicity);
+  const nextChargeDate = advanceChargeDate(current.nextChargeDate, current.periodicity, current.chargeDay);
   if (!nextChargeDate) {
     return { ok: false, errors: { _form: 'Data ou periodicidade da assinatura inválida.' } };
   }

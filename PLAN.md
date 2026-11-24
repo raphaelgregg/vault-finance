@@ -378,6 +378,14 @@ Convenção de IDs: `VF-<fase>-<nn>`. Preservar IDs; não remover tarefas conclu
 - Aceite (cumprido): unit 675; Rules 114 (regravar o mesmo id de dívida/compra é negado e o lote não soma no devedor); E2E — criar com devedor lança 1 dívida, editar para vincular lança 1, editar outro campo não relança, e duas cobranças simultâneas da mesma data nunca duplicam.
 - Observações: a primeira cobrança lançada ao vincular usa a data da assinatura (`nextChargeDate`), mesmo que seja futura; em assinatura só em CONTA (sem devedor) segue sem gerar despesa.
 
+- [x] **VF-COR-09 — Recorrência mensal/anual perdia o dia 29–31** (Médio) — CONCLUÍDA 2026-11-24 (**exige publicar as Rules ANTES do deploy**)
+- Problema (comprovado): `advanceChargeDate` calculava a próxima data a partir da data ATUAL, então 31/01 → 28/02 → 28/03 → 28/04… (e anual 29/02 → 28/02 para sempre): o dia original era perdido no primeiro mês curto.
+- Solução: novo campo opcional `chargeDay` (inteiro 1–31) na assinatura — o dia ORIGINAL, gravado pelo service só quando a data escolhida cai nos dias 29–31 (`chargeAnchorDay`; dias 1–28 existem em todo mês, então nada é gravado e o dado segue compatível com Rules antigas). `advanceChargeDate(iso, periodicidade, anchorDay)` usa a âncora (com clamp ao fim do mês) e é usado por `registerSubscriptionCharge` e pela previsão (`subscriptionOccurrences`). Resultado: 31/01 → 28/02 → **31/03** → 30/04 → 31/05; anual 29/02 volta em 2032. O formulário não envia `chargeDay` (é derivado da data e recalculado a cada edição). Sem `chargeDay` o comportamento é o anterior.
+- Arquivos: js/core/model/subscriptions.js, js/core/model/schemas.js, js/services/subscriptions.js, js/core/forecast.js, firestore.rules e testes (unit, Rules, E2E).
+- **Publicação (ação do dono):** `firestore.rules` ganhou a chave `chargeDay`. Publicar ANTES do deploy: com as Rules antigas, salvar assinatura cuja data cai nos dias 29–31 seria negado (dias 1–28 não são afetados).
+- Limite: assinaturas JÁ ajustadas para 28 (sem `chargeDay`) não têm como recuperar o dia original sozinhas; basta editar a assinatura e informar a próxima cobrança no dia correto (ex.: 31/03) — a âncora passa a ser gravada.
+- Aceite (cumprido): unit 687 (cadeias 31/01, 30/01, 29/01 bissexto, virada de ano, anual 29/02, âncora inválida, serviço e previsão); Rules 115 (chargeDay 1–31 inteiro, inválidos negados); E2E — mensal do dia 31 pela tela: 28/02 → 31/03 → 30/04 com `chargeDay` gravado.
+
 ### Fase 3 — Arquitetura, qualidade e refatoração
 
 - [x] **VF-3-01 — Reduzir duplicação nos services** (Médio) — CONCLUÍDA 2026-11-18: extrair helper de create/update/delete com auditoria reutilizando `firestore.js`, sem mudar API pública. Arquivos: `js/services/*.js`. Dependências: VF-1-01. Aceite: testes existentes passam sem alteração; diff líquido de linhas negativo.
@@ -477,3 +485,4 @@ Convenção de IDs: `VF-<fase>-<nn>`. Preservar IDs; não remover tarefas conclu
 - 2026-11-23 — VF-COR-06 concluída (layout do modal de Dívidas: modal largo, tabela compacta, resumo em uma linha).
 - 2026-11-24 — VF-COR-07 concluída em código (assinatura: conta opcional; destino cartão/conta/devedor). Rules precisam ser publicadas antes do deploy.
 - 2026-11-24 — VF-COR-08 concluída (vínculo com devedor lança a cobrança da próxima fatura; id determinístico contra duplicidade).
+- 2026-11-24 — VF-COR-09 concluída (recorrência mantém o dia 29–31 via `chargeDay`). Rules precisam ser publicadas antes do deploy.

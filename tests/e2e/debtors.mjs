@@ -662,6 +662,32 @@ try {
   await page.getByRole('button', { name: 'Registrar cobrança de Cloud pessoal' }).click();
   await page.waitForFunction(() => /Sem cartão nem devedor: não gera despesa/.test(document.querySelector('.toast')?.innerText ?? ''));
 
+  log('VF-COR-09: assinatura mensal do dia 31 mantém o dia ao longo dos ciclos (28/02 → 31/03 → 30/04)');
+  await page.getByRole('button', { name: /Nova assinatura/ }).click();
+  await page.fill('#name', 'Licença dia 31');
+  await page.fill('#amountCents', '20,00');
+  await page.fill('#nextChargeDate', '2027-01-31');
+  await page.selectOption('#categoryId', { index: 1 });
+  await page.locator('#subscription-form button[type="submit"]').click();
+  await page.waitForFunction(() => /Licença dia 31/.test(document.querySelector('#page-content tbody')?.innerText ?? ''));
+  const nextOf = async () => (await page.locator('#page-content tbody tr', { hasText: 'Licença dia 31' }).innerText()).match(/\d{2}\/\d{2}\/\d{4}/)?.[0];
+  assert.equal(await nextOf(), '31/01/2027');
+  const seen = [];
+  for (let i = 0; i < 3; i += 1) {
+    const before = await nextOf();
+    await page.evaluate(() => document.querySelector('.toast')?.remove());
+    await page.getByRole('button', { name: 'Registrar cobrança de Licença dia 31' }).click();
+    await page.waitForFunction((b) => !(document.querySelector('#page-content tbody tr:has(td)') && [...document.querySelectorAll('#page-content tbody tr')].find((r) => /Licença dia 31/.test(r.innerText))?.innerText.includes(b)), before);
+    seen.push(await nextOf());
+  }
+  assert.deepEqual(seen, ['28/02/2027', '31/03/2027', '30/04/2027']);
+  const stored = await page.evaluate(async () => {
+    const { listSubscriptions } = await import('/js/services/subscriptions.js');
+    const { auth } = await import('/js/firebase/client.js');
+    return (await listSubscriptions(auth.currentUser.uid)).find((x) => x.name === 'Licença dia 31').chargeDay;
+  });
+  assert.equal(stored, 31);
+
   await page.goto(`${app.base}/pages/dashboard.html`);
   await page.waitForSelector('#dashboard-month');
   const dash = await page.locator('#page-content').innerText();

@@ -42,7 +42,7 @@ export function summarizeSubscriptions(items = []) {
  * destino (31/01 → 28/02; 29/02 → 28/02). O clamp não "lembra" o dia original
  * (31/01 → 28/02 → 28/03). Retorna null para data/periodicidade inválidas.
  */
-export function advanceChargeDate(isoDate, periodicity) {
+export function advanceChargeDate(isoDate, periodicity, anchorDay = null) {
   const base = parseIsoDate(isoDate);
   if (!base || !CHARGES_PER_YEAR[periodicity]) return null;
   if (periodicity === 'weekly') {
@@ -52,6 +52,19 @@ export function advanceChargeDate(isoDate, periodicity) {
   const y = base.getUTCFullYear();
   const m = base.getUTCMonth() + months;
   const lastDay = new Date(Date.UTC(y, m + 1, 0, 12)).getUTCDate();
-  const day = Math.min(base.getUTCDate(), lastDay);
+  // O dia de cobrança é o ORIGINAL (`anchorDay`), não o da data atual: sem isso, 31/01 → 28/02 → 28/03… perde o dia 31 para
+  // sempre (e 29/02 → 28/02 nunca volta). Sem âncora válida, usa o dia da própria data (comportamento anterior).
+  const wanted = Number.isInteger(anchorDay) && anchorDay >= 1 && anchorDay <= 31 ? anchorDay : base.getUTCDate();
+  const day = Math.min(wanted, lastDay);
   return new Date(Date.UTC(y, m, day, 12)).toISOString().slice(0, 10);
+}
+
+/**
+ * Dia de ancoragem a GUARDAR na assinatura (`chargeDay`): só os dias 29–31 podem ser perdidos pelo ajuste ao fim do mês, então só
+ * eles precisam ser lembrados (dias 1–28 existem em todo mês: nada a guardar, e o dado segue compatível com Rules antigas).
+ * Retorna o dia (29–31) ou null. Puro.
+ */
+export function chargeAnchorDay(isoDate) {
+  const d = parseIsoDate(isoDate);
+  return d && d.getUTCDate() > 28 ? d.getUTCDate() : null;
 }

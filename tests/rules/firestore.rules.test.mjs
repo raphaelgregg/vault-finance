@@ -629,6 +629,16 @@ describe('Assinaturas (VF-2-03a)', () => {
     await assertFails(updateDoc(subDoc(db, 'com-devedor'), { debtorId: 'dv-bob', updatedAt: serverTimestamp() }));
   });
 
+  it('VF-COR-09: chargeDay opcional, inteiro de 1 a 31; inválidos negados', async () => {
+    const db = asUser(ALICE);
+    await assertSucceeds(setDoc(subDoc(db, 'cd1'), sub({ chargeDay: 31 })));
+    await assertSucceeds(setDoc(subDoc(db, 'cd2'), sub({ chargeDay: 29 })));
+    await assertSucceeds(setDoc(subDoc(db, 'cd3'), sub())); // ausente continua válido
+    for (const [i, bad] of [0, 32, -1, 1.5, '31', null].entries()) await assertFails(setDoc(subDoc(db, `bad${i}`), sub({ chargeDay: bad })));
+    await assertSucceeds(updateDoc(subDoc(db, 'cd1'), { chargeDay: deleteField(), updatedAt: serverTimestamp() })); // volta a dia ≤ 28
+    await assertFails(updateDoc(subDoc(db, 'cd2'), { chargeDay: 40, updatedAt: serverTimestamp() }));
+  });
+
   it('VF-COR-07: regravar o MESMO id de cobrança (dívida ou compra da assinatura) é negado — lote repetido/concorrente falha inteiro e não duplica nem soma no devedor', async () => {
     const db = asUser(ALICE);
     const stamps = () => ({ createdAt: serverTimestamp(), updatedAt: serverTimestamp() });

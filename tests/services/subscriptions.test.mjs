@@ -56,7 +56,7 @@ describe('subscriptions — schema (espelha firestore.rules)', () => {
   it('chaves e enums iguais às Rules', () => {
     assert.deepEqual(
       Object.keys(SCHEMAS.subscriptions.fields).sort(),
-      ['accountId', 'amountCents', 'cardId', 'categoryId', 'debtorId', 'name', 'nextChargeDate', 'notes', 'periodicity', 'status']
+      ['accountId', 'amountCents', 'cardId', 'categoryId', 'chargeDay', 'debtorId', 'name', 'nextChargeDate', 'notes', 'periodicity', 'status']
     );
     assert.deepEqual(getPeriodicityOptions().map((o) => o.value), ['monthly', 'weekly', 'yearly']);
     assert.deepEqual(getSubscriptionStatusOptions().map((o) => o.value), ['active', 'paused', 'cancelled']);
@@ -356,5 +356,34 @@ describe('subscriptions — vincular devedor lança a cobrança da PRÓXIMA fatu
     const r = await createSubscription('u1', raw, deps);
     assert.equal(r.ok, false);
     assert.equal(committed.length, 0);
+  });
+});
+
+describe('subscriptions — chargeDay (dia de cobrança original, VF-COR-09)', () => {
+  const raw = { name: 'Netflix', amountCents: '55,90', periodicity: 'monthly', nextChargeDate: '2026-01-31', categoryId: 'cat', status: 'active' };
+  const deps = (over = {}) => ({ lookupCategory: async () => ({ id: 'cat', kind: 'expense' }), create: async (u, c, data) => { deps.created = data; return 'new1'; }, writeAudit: async () => ({ ok: true }), ...over });
+
+  it('data nos dias 29–31 grava chargeDay; dias 1–28 NÃO gravam (compatível com Rules antigas)', async () => {
+    for (const [date, expected] of [['2026-01-31', 31], ['2026-01-30', 30], ['2026-03-29', 29]]) {
+      assert.equal((await createSubscription('u1', { ...raw, nextChargeDate: date }, deps())).ok, true);
+      assert.equal(deps.created.chargeDay, expected, date);
+    }
+    for (const date of ['2026-01-28', '2026-01-15', '2026-01-01']) {
+      assert.equal((await createSubscription('u1', { ...raw, nextChargeDate: date }, deps())).ok, true);
+      assert.equal('chargeDay' in deps.created, false, date);
+    }
+  });
+
+  it('o formulário não consegue forçar chargeDay: valor enviado é ignorado e recalculado da data', async () => {
+    await createSubscription('u1', { ...raw, nextChargeDate: '2026-01-15', chargeDay: 31 }, deps());
+    assert.equal('chargeDay' in deps.created, false);
+  });
+
+  it('editar: a âncora acompanha a data (29–31 grava; 1–28 remove com null → deleteField)', async () => {
+    const written = [];
+    const update = async (u, c, id, data) => { written.push(data); };
+    await updateSubscription('u1', 's1', raw, deps({ update }));
+    await updateSubscription('u1', 's1', { ...raw, nextChargeDate: '2026-01-15' }, deps({ update }));
+    assert.deepEqual(written.map((w) => w.chargeDay), [31, null]);
   });
 });
