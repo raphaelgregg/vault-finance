@@ -110,6 +110,7 @@ export async function createDebtPlan(uid, rawData, io = {}) {
     type: 'update', collection: DEBTORS, docId: debtor.id ?? rawData.debtorId, action: 'debt-plan',
     data: debtor.status === 'paid' ? { status: 'open' } : {}, increments: { lentCents: total },
   });
+  if (Array.isArray(io.extraOps)) ops.push(...io.extraOps); // ex.: avanço da próxima cobrança de uma assinatura (mesmo lote atômico)
   const ids = await (io.commitAtomic ?? commitAtomic)(uid, ops, io);
   return { ok: true, ids, groupId, installments: rawN, totalCents: total };
 }

@@ -363,6 +363,14 @@ Convenção de IDs: `VF-<fase>-<nn>`. Preservar IDs; não remover tarefas conclu
 - Aceite (cumprido): medido no navegador (1366×768) — conteúdo da tabela 1146px em área de 1146px (sem rolagem horizontal; antes 1312 em 526); E2E completo sem alterações nos seletores.
 - Limite: em celular (≤ 400px) a tabela continua com rolagem horizontal (10 colunas); layout em cartões para mobile não foi feito.
 
+- [x] **VF-COR-07 — Assinatura: conta opcional e cobrança em cartão, conta ou devedor** (Médio) — CONCLUÍDA 2026-11-24 (código; **exige publicar as Rules ANTES do deploy**)
+- Problema: a conta era obrigatória; assinatura paga por um devedor (ex.: Netflix da Roberta no cartão) não podia ser vinculada a ele; assinaturas sem conta/cartão não eram possíveis.
+- Solução: `accountId` opcional e `debtorId` novo/opcional (`js/core/model/schemas.js`, `firestore.rules`). Ao registrar a cobrança (`registerSubscriptionCharge`): **cartão** (+devedor) → parcela na fatura, vinculada ao devedor (soma no emprestado, vira valor a receber); **sem cartão + devedor** → dívida à vista (vencimento = data da cobrança) criada no MESMO lote atômico que avança a data (`createDebtPlan` aceita `io.extraOps`); **sem cartão e sem devedor** → só avança a data (via `account` com conta, `none` sem). Comportamento de cartão e/ou conta SEM devedor: inalterado. O recebimento do devedor entra na conta escolhida no recebimento (fluxo existente) e a fatura é paga à parte — fluxos independentes, não acoplados. Previsão e "próximos vencimentos" só tratam como saída do caixa a assinatura com conta (`!cardId && accountId`); sem conta nem cartão não sai do SEU caixa. `debtor.delete` e `DEBTOR_LINK_QUERIES` passam a bloquear devedor com assinatura vinculada. Tela: conta opcional, seletor de devedor, coluna "Cobrança" com destino (cartão/conta/devedor ou "Sem vínculo"). CSV: coluna `devedor`; `conta` deixa de ser obrigatória.
+- Arquivos: js/core/model/schemas.js, firestore.rules, js/services/subscriptions.js, js/services/debtPayments.js, js/services/debtors.js, js/core/forecast.js, js/core/aggregates.js, js/core/importSchema.js, js/modules/assinaturas.js, server/finance/ops.mjs, README.md e testes (rules, unit, integração, E2E).
+- **Publicação (ação do dono):** publicar `firestore.rules` ANTES do código novo — sem isso, salvar assinatura sem conta ou com devedor é negado pelas Rules publicadas (conta ainda obrigatória e `debtorId` fora do schema). Ordem: Rules → deploy das funções/estático. Nada foi publicado por mim.
+- Aceite (cumprido): Rules (113) incluindo conta opcional/devedor/devedor de outro usuário/schema fechado; unit (668) cobrindo criação, cobrança por destino (cartão+devedor, só devedor, conta+devedor, sem vínculo, só conta, devedor cancelado), previsão e vencimentos; integração `debtor.delete`; E2E de Assinaturas × Devedores.
+- Decisões mantidas: assinatura em CONTA continua sem gerar despesa (apenas avança a data; lance em Despesas) — gerar despesa real em conta exigiria regra nova e testes de regressão de saldo (não feito).
+
 ### Fase 3 — Arquitetura, qualidade e refatoração
 
 - [x] **VF-3-01 — Reduzir duplicação nos services** (Médio) — CONCLUÍDA 2026-11-18: extrair helper de create/update/delete com auditoria reutilizando `firestore.js`, sem mudar API pública. Arquivos: `js/services/*.js`. Dependências: VF-1-01. Aceite: testes existentes passam sem alteração; diff líquido de linhas negativo.
@@ -460,3 +468,4 @@ Convenção de IDs: `VF-<fase>-<nn>`. Preservar IDs; não remover tarefas conclu
 - 2026-11-23 — VF-COR-04 concluída (cancelar dívida inteira de devedor).
 - 2026-11-23 — VF-COR-05 concluída (cancelar várias parcelas selecionadas em 1 requisição: `debt.cancelMany`).
 - 2026-11-23 — VF-COR-06 concluída (layout do modal de Dívidas: modal largo, tabela compacta, resumo em uma linha).
+- 2026-11-24 — VF-COR-07 concluída em código (assinatura: conta opcional; destino cartão/conta/devedor). Rules precisam ser publicadas antes do deploy.

@@ -23,6 +23,7 @@ import { listCategories, categoryLabel } from '../services/categories.js';
 import { listAccounts } from '../services/accounts.js';
 import { accountLabel as accountText } from '../core/model.js';
 import { listCards } from '../services/creditCards.js';
+import { listDebtors } from '../services/debtors.js';
 
 import { todayInAppZone } from '../utils/dates.js';
 import { clearErrors, formatCentsInput, formatDate, optionLabel } from '../components/form-kit.js';
@@ -34,6 +35,7 @@ let subscriptionsCache = [];
 let categoriesCache = [];
 let accountsCache = [];
 let cardsCache = [];
+let debtorsCache = [];
 
 export async function render(target, { user }) {
   currentUser = user;
@@ -42,11 +44,12 @@ export async function render(target, { user }) {
 }
 
 async function reload() {
-  [subscriptionsCache, categoriesCache, accountsCache, cardsCache] = await Promise.all([
+  [subscriptionsCache, categoriesCache, accountsCache, cardsCache, debtorsCache] = await Promise.all([
     listSubscriptions(currentUser.uid),
     listCategories(currentUser.uid),
     listAccounts(currentUser.uid),
     listCards(currentUser.uid).catch((error) => { console.error('[assinaturas] falha ao listar cartões', error); return []; }),
+    listDebtors(currentUser.uid).catch((error) => { console.error('[assinaturas] falha ao listar devedores', error); return []; }),
   ]);
   renderPage();
 }
@@ -115,7 +118,7 @@ function createTableOrEmpty() {
     { key: 'amountCents', label: 'Valor', numeric: true, render: (v) => formatCents(Number(v) || 0) },
     { key: 'periodicity', label: 'Periodicidade', render: (v) => optionLabel(getPeriodicityOptions(), v) },
     { key: 'nextChargeDate', label: 'Próxima cobrança', render: formatDate },
-    { key: 'accountId', label: 'Cobrança', render: (v, item) => (item.cardId ? `Cartão ${cardName(item.cardId)} (fatura)` : `Conta ${accountLabel(v)}`) },
+    { key: 'accountId', label: 'Cobrança', render: (_, item) => chargeTargetText(item) },
     { key: 'status', label: 'Status', render: (v) => optionLabel(getSubscriptionStatusOptions(), v) },
   ];
 
@@ -151,13 +154,23 @@ function iconButton(label, icon, onClick, extraClass = '') {
 }
 
 const cardName = (id) => cardsCache.find((c) => c.id === id)?.name ?? '—';
+const debtorName = (id) => debtorsCache.find((d) => d.id === id)?.name ?? '—';
+
+/** Onde a assinatura é cobrada: cartão (fatura) ou conta; o devedor, quando houver, é quem paga (a receber). */
+function chargeTargetText(item) {
+  const where = item.cardId ? `Cartão ${cardName(item.cardId)} (fatura)` : item.accountId ? `Conta ${accountLabel(item.accountId)}` : null;
+  const who = item.debtorId ? `Devedor ${debtorName(item.debtorId)}` : null;
+  return [where, who].filter(Boolean).join(' · ') || 'Sem vínculo (só acompanhamento)';
+}
 
 async function chargeNow(item) {
   const r = await registerSubscriptionCharge(currentUser.uid, item.id);
   if (r.ok) {
     toast(r.via === 'card'
-      ? `Cobrança lançada na fatura do cartão ${cardName(item.cardId)}; próxima em ${formatDate(r.nextChargeDate)}.`
-      : `Cobrança registrada; próxima em ${formatDate(r.nextChargeDate)}. (Cobrança direta: não gera despesa nem altera o saldo — lance em Despesas se quiser refletir.)`, 6000);
+      ? `Cobrança lançada na fatura do cartão ${cardName(item.cardId)}${r.debtorId ? ` e vinculada ao devedor ${debtorName(r.debtorId)} (a receber)` : ''}; próxima em ${formatDate(r.nextChargeDate)}.`
+      : r.via === 'debtor'
+        ? `Dívida criada para ${debtorName(r.debtorId)} (a receber); próxima cobrança em ${formatDate(r.nextChargeDate)}.`
+        : `Cobrança registrada; próxima em ${formatDate(r.nextChargeDate)}. (Sem cartão nem devedor: não gera despesa nem altera o saldo — lance em Despesas se quiser refletir.)`, 6000);
     await reload();
   } else {
     toast(r.errors?._form ?? Object.values(r.errors ?? {})[0] ?? 'Não foi possível registrar a cobrança.', 6000);
@@ -273,13 +286,18 @@ function openSubscriptionModal(item = null) {
       })),
     ]),
     field('Cobrada no cartão (opcional)', 'cardId', el('select', { id: 'cardId', name: 'cardId' }, [
-      el('option', { value: '' }, 'Não — débito direto na conta'),
+      el('option', { value: '' }, 'Nenhum (sem cartão)'),
       ...cardsCache.filter((c) => c.status !== 'cancelled' || c.id === item?.cardId).map((c) => el('option', { value: c.id, selected: item?.cardId === c.id }, c.name)),
     ])),
     el('p', { class: 'card__hint', text: 'No cartão, cada cobrança vira uma parcela na fatura (a conta só é debitada ao pagar a fatura) e não entra em "próximos vencimentos" para não duplicar a fatura.' }),
+    field('Devedor que paga (opcional)', 'debtorId', el('select', { id: 'debtorId', name: 'debtorId' }, [
+      el('option', { value: '' }, 'Nenhum'),
+      ...debtorsCache.filter((d) => (d.status !== 'cancelled' && !d.archived) || d.id === item?.debtorId).map((d) => el('option', { value: d.id, selected: item?.debtorId === d.id }, d.name)),
+    ])),
+    el('p', { class: 'card__hint', text: 'Com devedor, cada cobrança vira valor a receber dele (parcela na fatura do cartão ou dívida à vista, se não houver cartão). Quando ele pagar, o dinheiro entra na conta escolhida no recebimento; a fatura do cartão é paga à parte.' }),
     el('div', { class: 'form__row' }, [
-      field('Conta *', 'accountId', el('select', { id: 'accountId', name: 'accountId', required: true }, [
-        el('option', { value: '', disabled: true, selected: !item }, 'Selecione uma conta'),
+      field('Conta (opcional)', 'accountId', el('select', { id: 'accountId', name: 'accountId' }, [
+        el('option', { value: '' }, 'Sem conta'),
         ...activeAccounts.map((a) => el('option', { value: a.id, selected: item?.accountId === a.id }, accountText(a))),
       ])),
       field('Categoria *', 'categoryId', el('select', { id: 'categoryId', name: 'categoryId', required: true }, [
@@ -325,8 +343,9 @@ function openSubscriptionModal(item = null) {
       amountCents: data.get('amountCents'),
       periodicity: data.get('periodicity'),
       nextChargeDate: data.get('nextChargeDate'),
-      accountId: data.get('accountId'),
+      accountId: data.get('accountId') || undefined,
       cardId: data.get('cardId') || undefined,
+      debtorId: data.get('debtorId') || undefined,
       categoryId: data.get('categoryId'),
       status: data.get('status'),
       notes: data.get('notes').trim() || undefined,

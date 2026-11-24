@@ -162,6 +162,7 @@ export function monthlyForecast({
   const directItems = []; // saem da conta na própria data
   const cardCharges = []; // ainda NÃO lançadas no cartão
   for (const s of active) {
+    if (!s.cardId && !s.accountId) continue; // sem conta nem cartão (só devedor ou só acompanhamento): não sai do SEU caixa
     if (!s.cardId) {
       for (const date of subscriptionOccurrences(s, start, end)) {
         const twin = matchingExpense(s, inMonth);
@@ -228,7 +229,7 @@ export function monthlyForecast({
     const monthExpenses = sum(live.filter((e) => e.status === 'pending' && e.dueDate >= b.start && e.dueDate <= b.end));
     const monthInvoices = sum(unpaid.filter((inv) => inv.dueDate >= b.start && inv.dueDate <= b.end), (inv) => inv.unpaidCents);
     // Saída de caixa: assinaturas diretas na data + assinaturas no cartão não lançadas pelo vencimento da fatura projetada.
-    const monthSubs = sum(active.filter((s) => !s.cardId).flatMap((s) => subscriptionOccurrences(s, b.start, b.end).map(() => s)), (s) => s.amountCents)
+    const monthSubs = sum(active.filter((s) => !s.cardId && s.accountId).flatMap((s) => subscriptionOccurrences(s, b.start, b.end).map(() => s)), (s) => s.amountCents)
       + sum(cardCharges.filter((c) => c.dueDate >= b.start && c.dueDate <= b.end));
     // Comprometimento (informativo, fora do total de caixa): cobranças previstas no cartão pelo MÊS DA COBRANÇA.
     const cardChargesCommitted = sum(cardCharges.filter((c) => c.chargeMonth === m));

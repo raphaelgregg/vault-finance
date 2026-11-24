@@ -34,6 +34,7 @@ export const DEBTOR_LINK_QUERIES = Object.freeze([
   { collection: COLLECTIONS.debts, field: 'debtorId', label: 'dívidas (parcelas)' },
   { collection: COLLECTIONS.debtPayments, field: 'debtorId', label: 'recebimentos' },
   { collection: COLLECTIONS.cardPurchases, field: 'debtorId', label: 'compras no cartão' },
+  { collection: COLLECTIONS.subscriptions, field: 'debtorId', label: 'assinaturas' },
 ]);
 
 /** Cancelar e reabrir apenas; `paid` só nasce de recebimentos. */

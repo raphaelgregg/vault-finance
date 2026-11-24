@@ -276,15 +276,16 @@ service cloud.firestore {
       allow read: if isOwner(userId) || isAdmin();
       allow create, update: if isOwner(userId)
         && keysOk(['name', 'amountCents', 'periodicity', 'nextChargeDate', 'accountId',
-                   'cardId', 'categoryId', 'status', 'notes', 'createdAt', 'updatedAt'])
+                   'cardId', 'debtorId', 'categoryId', 'status', 'notes', 'createdAt', 'updatedAt'])
         && requiredOk(['name', 'amountCents', 'periodicity', 'nextChargeDate',
-                       'accountId', 'categoryId', 'status', 'createdAt', 'updatedAt'])
+                       'categoryId', 'status', 'createdAt', 'updatedAt'])
         && text('name', 80)
         && positiveCents(data().amountCents)
         && oneOf('periodicity', ['monthly', 'weekly', 'yearly'])
         && stamp(data().nextChargeDate)
-        && ref(userId, 'accounts', 'accountId')
+        && optionalRef(userId, 'accounts', 'accountId')
         && optionalRef(userId, 'creditCards', 'cardId')
+        && optionalRef(userId, 'debtors', 'debtorId')
         && ref(userId, 'categories', 'categoryId')
         && oneOf('status', ['active', 'paused', 'cancelled'])
         && optionalString('notes', 500)

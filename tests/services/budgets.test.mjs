@@ -95,7 +95,7 @@ describe('dashboard service', () => {
       transfers: [],
       debtPayments: [{ accountId: 'a1', amountCents: 3000 }],
       goalTransactions: [{ accountId: 'a1', type: 'deposit', amountCents: 10000 }],
-      subscriptions: [{ id: 's', status: 'active', nextChargeDate: '2026-11-25', name: 'Spotify', amountCents: 2000 }],
+      subscriptions: [{ id: 's', status: 'active', nextChargeDate: '2026-11-25', name: 'Spotify', amountCents: 2000, accountId: 'a1' }],
       debtors: [{ status: 'open', lentCents: 10000, receivedCents: 3000 }],
     };
     const { io } = makeIo({ tables });
