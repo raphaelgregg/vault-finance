@@ -66,6 +66,10 @@ defineOp('transfer.confirm', {
     const t = await ctx.get('transfers', p.transferId);
     if (!t) throw new FinanceError(404, 'NOT_FOUND', 'Transferência não encontrada.');
     if (t.status !== 'pending') throw invalidState(`Transferência já está ${t.status === 'confirmed' ? 'confirmada' : 'cancelada'}; não é possível confirmá-la.`, { status: t.status });
+    // Transferência ESTORNADA é histórico: não pode ser reaberta e confirmada de novo (ficaria confirmada com estorno registrado).
+    if ((await ctx.tx.get(ctx.ref('reversals', `transfers_${p.transferId}`))).exists) {
+      throw invalidState('Esta transferência foi estornada e não pode ser confirmada de novo; lance uma nova transferência.', { status: t.status });
+    }
     const from = await ctx.account(t.fromAccountId);
     await ctx.account(t.toAccountId);
     const balance = await ctx.balanceOf(from);
@@ -516,8 +520,18 @@ defineOp('reversal.create', {
   validate: (p) => ({ kind: v.enum(p.kind, 'kind', Object.keys(REVERSIBLE)), targetId: v.id(p.targetId, 'targetId'), reason: v.text(p.reason, 'reason', { min: 3, max: 300, required: true }), date: p.date ? v.date(p.date) : undefined }),
   async prepare(ctx, p, operationId) {
     const spec = REVERSIBLE[p.kind];
-    const revId = `${spec.coll}_${p.targetId}`;
-    if ((await ctx.tx.get(ctx.ref('reversals', revId))).exists) throw new FinanceError(409, 'ALREADY_REVERSED', 'Este lançamento já foi estornado.');
+    let revId = `${spec.coll}_${p.targetId}`;
+    if ((await ctx.tx.get(ctx.ref('reversals', revId))).exists) {
+      // Estorno anterior existe. Se o lançamento VOLTOU a ser estornável depois dele (receita recebida de novo, transferência
+      // confirmada de novo por uma versão antiga da tela), é uma nova realização: novo estorno com sufixo (`..._2`, `..._3`…).
+      // Sem isso o lançamento ficaria preso (confirmado e impossível de estornar). Lançamento já estornado e no estado
+      // resultante do estorno continua sendo ALREADY_REVERSED (duplicata); recebimento/movimento de meta não têm status e nunca reabrem.
+      const again = spec.status ? await ctx.get(spec.coll, p.targetId) : null;
+      if (!again || again.status !== spec.status) throw new FinanceError(409, 'ALREADY_REVERSED', 'Este lançamento já foi estornado.');
+      let n = 2;
+      while ((await ctx.tx.get(ctx.ref('reversals', `${revId}_${n}`))).exists) n += 1;
+      revId = `${revId}_${n}`;
+    }
     const target = await ctx.get(spec.coll, p.targetId);
     if (!target) throw new FinanceError(404, 'NOT_FOUND', 'Lançamento não encontrado.');
     if (spec.status && target.status !== spec.status) throw invalidState(`Só é possível estornar lançamento ${spec.status === 'received' ? 'recebido' : spec.status === 'paid' ? 'pago' : 'confirmado'}.`, { status: target.status });

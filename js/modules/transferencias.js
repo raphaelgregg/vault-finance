@@ -501,7 +501,7 @@ function openTransferModal(transfer = null) {
           id: 'status',
           name: 'status',
           required: true,
-        }, statuses.map((s) =>
+        }, (transfer?.status === 'cancelled' ? statuses.filter((x) => x.value === 'cancelled') : statuses).map((s) =>
           el('option', { value: s.value, selected: transfer?.status === s.value }, s.label)
         )),
         el('span', { class: 'form__error', 'data-for': 'status' }),
