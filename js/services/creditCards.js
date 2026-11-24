@@ -268,7 +268,9 @@ export async function registerCardPurchase(uid, cardId, rawData, io = {}) {
       amountCents: centsToMoneyString(parts[number - 1]),
     });
     if (!part.ok) return { ok: false, errors: part.errors };
-    purchaseOps.push({ type: 'create', collection: PURCHASES, data: part.data });
+    // `io.purchaseDocIds[n-1]`: id determinístico (ex.: assinatura × data) — regravar o mesmo id é um UPDATE, negado pelas Rules
+    // (compra lançada é imutável), então um lote repetido/concorrente falha inteiro e NÃO duplica a compra nem soma no devedor.
+    purchaseOps.push({ type: 'create', collection: PURCHASES, ...(io.purchaseDocIds?.[number - 1] ? { docId: io.purchaseDocIds[number - 1] } : {}), data: part.data });
   }
 
   // As Rules validam `invoiceId` com exists() (estado ANTERIOR ao lote): uma parcela não pode

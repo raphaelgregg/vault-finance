@@ -132,6 +132,7 @@ describe('registerSubscriptionCharge — destinos: cartão, devedor e sem víncu
     const ops = atomic.at(-1);
     const buy = ops.find((o) => o.collection === 'cardPurchases');
     assert.deepEqual([buy.data.debtorId, buy.data.amountCents, buy.data.installmentsTotal], ['dv', 5590, 1]);
+    assert.equal(buy.docId, 'sub_s1_2026-11-05'); // id determinístico: uma compra por assinatura e data
     assert.deepEqual(ops.find((o) => o.collection === 'debtors').increments, { lentCents: 5590 });
     assert.deepEqual(ops.find((o) => o.collection === 'subscriptions'), advance); // avanço da data no MESMO lote
     assert.equal(ops.some((o) => o.collection === 'expenses'), false);
@@ -198,5 +199,21 @@ describe('registerSubscriptionCharge — destinos: cartão, devedor e sem víncu
         assert.equal(atomic.length + updates.length, 0);
       }
     }
+  });
+
+  it('DUPLICIDADE: cobrança já lançada (cartão ou dívida) é recusada sem gravar; corrida no lote vira "já lançada"', async () => {
+    for (const [subscription, collection] of [[base({ cardId: 'c1', debtorId: 'dv' }), 'cardPurchases'], [base({ debtorId: 'dv' }), 'debts']]) {
+      const m = mk(subscription);
+      const getById = m.io.getById;
+      m.io.getById = async (u, c, id) => (c === collection && id === 'sub_s1_2026-11-05' ? { id } : getById(u, c, id));
+      const r = await registerSubscriptionCharge(uid, 's1', m.io);
+      assert.equal(r.ok, false, collection);
+      assert.match(r.errors._form, /05\/11\/2026 desta assinatura já foi lançada/);
+      assert.equal(m.atomic.length + m.updates.length, 0);
+    }
+    const raced = mk(base({ debtorId: 'dv' }));
+    raced.io.commitAtomic = async () => { throw Object.assign(new Error('denied'), { code: 'permission-denied' }); };
+    const r = await registerSubscriptionCharge(uid, 's1', raced.io);
+    assert.deepEqual([r.ok, /já foi lançada/.test(r.errors._form)], [false, true]);
   });
 });

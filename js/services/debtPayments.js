@@ -103,7 +103,9 @@ export async function createDebtPlan(uid, rawData, io = {}) {
       dueDate: clampDayInMonth(month, day), installmentNumber: n, installmentsTotal: rawN, debtGroupId: groupId, status: 'pending',
     });
     if (!built.ok) return { ok: false, errors: built.errors };
-    ops.push({ type: 'create', collection: DEBTS, data: built.data });
+    // `io.debtDocIds[n-1]`: id determinístico (ex.: assinatura × data). Regravar o mesmo id é UPDATE (negado nas Rules de `debts`):
+    // lote repetido/concorrente falha inteiro e NÃO duplica a dívida nem soma de novo no devedor.
+    ops.push({ type: 'create', collection: DEBTS, ...(io.debtDocIds?.[n - 1] ? { docId: io.debtDocIds[n - 1] } : {}), data: built.data });
   }
   // Soma por `increment` (não valor absoluto de leitura velha); devedor quitado volta a `open` no mesmo lote.
   ops.push({

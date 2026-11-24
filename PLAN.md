@@ -371,6 +371,13 @@ Convenção de IDs: `VF-<fase>-<nn>`. Preservar IDs; não remover tarefas conclu
 - Aceite (cumprido): Rules (113) incluindo conta opcional/devedor/devedor de outro usuário/schema fechado; unit (668) cobrindo criação, cobrança por destino (cartão+devedor, só devedor, conta+devedor, sem vínculo, só conta, devedor cancelado), previsão e vencimentos; integração `debtor.delete`; E2E de Assinaturas × Devedores.
 - Decisões mantidas: assinatura em CONTA continua sem gerar despesa (apenas avança a data; lance em Despesas) — gerar despesa real em conta exigiria regra nova e testes de regressão de saldo (não feito).
 
+- [x] **VF-COR-08 — Vínculo com devedor gera a cobrança da próxima fatura, sem duplicar** (Médio) — CONCLUÍDA 2026-11-24 (nenhuma mudança de Rules)
+- Problema: vincular um devedor a uma assinatura não gerava valor a receber até clicar em "Registrar cobrança" (confuso) e a cobrança podia ser duplicada (leitura+escrita não atômica: dois cliques simultâneos criavam duas dívidas da mesma data).
+- Solução: (1) **id determinístico** da cobrança por assinatura × data (`sub_<subscriptionId>_<AAAA-MM-DD>`, `chargeDocId`) na dívida à vista (`createDebtPlan` → `io.debtDocIds`) e na parcela do cartão (`registerCardPurchase` → `io.purchaseDocIds`). Regravar o mesmo id é UPDATE, negado pelas Rules atuais (`debts` e `cardPurchases` são imutáveis), então um lote repetido/concorrente falha inteiro — sem duplicar a dívida e sem somar de novo no emprestado do devedor; há também checagem prévia de existência com mensagem amigável. (2) **Vínculo lança a cobrança**: ao criar com devedor, ou editar trocando/adicionando o devedor (assinatura ativa), lança UMA cobrança — a de `nextChargeDate`, a PRÓXIMA fatura — e avança a data no mesmo lote. **Nada retroativo nem futuro**: a recorrência pode ser pausada ou cancelada, então não se gera o que ainda não é conhecido; ciclos seguintes entram em "Registrar cobrança" (idempotente). Editar outros campos, desvincular, pausar ou cancelar não lançam. A tela informa o que foi lançado (ou que a assinatura foi salva mas a cobrança não pôde ser lançada).
+- Arquivos: js/services/subscriptions.js, js/services/creditCards.js, js/services/debtPayments.js, js/modules/assinaturas.js e testes (unit, Rules, E2E).
+- Aceite (cumprido): unit 675; Rules 114 (regravar o mesmo id de dívida/compra é negado e o lote não soma no devedor); E2E — criar com devedor lança 1 dívida, editar para vincular lança 1, editar outro campo não relança, e duas cobranças simultâneas da mesma data nunca duplicam.
+- Observações: a primeira cobrança lançada ao vincular usa a data da assinatura (`nextChargeDate`), mesmo que seja futura; em assinatura só em CONTA (sem devedor) segue sem gerar despesa.
+
 ### Fase 3 — Arquitetura, qualidade e refatoração
 
 - [x] **VF-3-01 — Reduzir duplicação nos services** (Médio) — CONCLUÍDA 2026-11-18: extrair helper de create/update/delete com auditoria reutilizando `firestore.js`, sem mudar API pública. Arquivos: `js/services/*.js`. Dependências: VF-1-01. Aceite: testes existentes passam sem alteração; diff líquido de linhas negativo.
@@ -469,3 +476,4 @@ Convenção de IDs: `VF-<fase>-<nn>`. Preservar IDs; não remover tarefas conclu
 - 2026-11-23 — VF-COR-05 concluída (cancelar várias parcelas selecionadas em 1 requisição: `debt.cancelMany`).
 - 2026-11-23 — VF-COR-06 concluída (layout do modal de Dívidas: modal largo, tabela compacta, resumo em uma linha).
 - 2026-11-24 — VF-COR-07 concluída em código (assinatura: conta opcional; destino cartão/conta/devedor). Rules precisam ser publicadas antes do deploy.
+- 2026-11-24 — VF-COR-08 concluída (vínculo com devedor lança a cobrança da próxima fatura; id determinístico contra duplicidade).

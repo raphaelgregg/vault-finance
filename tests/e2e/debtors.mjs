@@ -596,18 +596,7 @@ try {
   });
   await page.goto(`${app.base}/pages/assinaturas.html`);
   await page.waitForSelector('#page-content .panel');
-  await page.getByRole('button', { name: /Nova assinatura/ }).click();
-  assert.equal(await page.locator('#accountId').getAttribute('required'), null, 'conta não é mais obrigatória');
-  await page.fill('#name', 'Disney');
-  await page.fill('#amountCents', '33,90');
-  await page.selectOption('#categoryId', { index: 1 });
-  await page.selectOption('#debtorId', { label: 'Roberta' });
-  await page.locator('#subscription-form button[type="submit"]').click();
-  await page.waitForFunction(() => /Disney/.test(document.querySelector('#page-content tbody')?.innerText ?? ''));
-  assert.match(await page.locator('#page-content tbody tr', { hasText: 'Disney' }).innerText(), /Devedor Roberta/);
-  await page.getByRole('button', { name: 'Registrar cobrança de Disney' }).click();
-  await page.waitForFunction(() => /Dívida criada para Roberta/.test(document.querySelector('.toast')?.innerText ?? ''));
-  const roberta = await page.evaluate(async () => {
+  const robertaState = () => page.evaluate(async () => {
     const { listDebtors } = await import('/js/services/debtors.js');
     const { listDebts } = await import('/js/services/debtPayments.js');
     const { auth } = await import('/js/firebase/client.js');
@@ -616,7 +605,53 @@ try {
     const debts = await listDebts(uid, debtor.id);
     return { lentCents: debtor.lentCents, debts: debts.map((d) => [d.description, d.principalCents, d.status, d.installmentsTotal]) };
   });
-  assert.deepEqual(roberta, { lentCents: 3390, debts: [['Disney', 3390, 'pending', 1]] });
+  // 1) CRIAR já com devedor: o vínculo lança a cobrança da PRÓXIMA fatura (uma só) como dívida a receber
+  await page.getByRole('button', { name: /Nova assinatura/ }).click();
+  assert.equal(await page.locator('#accountId').getAttribute('required'), null, 'conta não é mais obrigatória');
+  await page.fill('#name', 'Disney');
+  await page.fill('#amountCents', '33,90');
+  await page.selectOption('#categoryId', { index: 1 });
+  await page.selectOption('#debtorId', { label: 'Roberta' });
+  await page.locator('#subscription-form button[type="submit"]').click();
+  await page.waitForFunction(() => /Cobrança de .* lançada como dívida de Roberta \(a receber\)/.test(document.querySelector('.toast')?.innerText ?? ''));
+  await page.waitForFunction(() => /Disney/.test(document.querySelector('#page-content tbody')?.innerText ?? ''));
+  assert.match(await page.locator('#page-content tbody tr', { hasText: 'Disney' }).innerText(), /Devedor Roberta/);
+  assert.deepEqual(await robertaState(), { lentCents: 3390, debts: [['Disney', 3390, 'pending', 1]] }); // UMA dívida, sem futuras
+  // 2) EDITAR para vincular o devedor também lança (uma vez); editar de novo sem trocar o devedor NÃO relança
+  await page.getByRole('button', { name: /Nova assinatura/ }).click();
+  await page.fill('#name', 'Hulu');
+  await page.fill('#amountCents', '10,00');
+  await page.selectOption('#categoryId', { index: 1 });
+  await page.locator('#subscription-form button[type="submit"]').click();
+  await page.waitForFunction(() => /Hulu/.test(document.querySelector('#page-content tbody')?.innerText ?? ''));
+  assert.equal((await robertaState()).debts.length, 1, 'sem devedor: nada é lançado');
+  await page.getByRole('button', { name: /^Editar Hulu/ }).click();
+  await page.selectOption('#debtorId', { label: 'Roberta' });
+  await page.locator('#subscription-form button[type="submit"]').click();
+  await page.waitForFunction(() => /Hulu/.test(document.querySelector('#page-content tbody')?.innerText ?? '') && /Roberta/.test(document.querySelector('#page-content tbody')?.innerText ?? ''));
+  await page.waitForFunction(() => /Assinatura atualizada com sucesso\. Cobrança de .* lançada como dívida de Roberta/.test(document.querySelector('.toast')?.innerText ?? ''));
+  assert.deepEqual((await robertaState()).debts.map((d) => d[0]).sort(), ['Disney', 'Hulu']);
+  await page.evaluate(() => document.querySelector('.toast')?.remove());
+  await page.getByRole('button', { name: /^Editar Hulu/ }).click();
+  await page.fill('#name', 'Hulu Plus');
+  await page.locator('#subscription-form button[type="submit"]').click();
+  await page.waitForFunction(() => /Hulu Plus/.test(document.querySelector('#page-content tbody')?.innerText ?? ''));
+  assert.equal((await robertaState()).debts.length, 2, 'editar outro campo não relança a cobrança');
+  // 3) DUAS cobranças simultâneas da MESMA assinatura/data nunca duplicam a dívida (id determinístico + Rules)
+  const chargeRace = await page.evaluate(async () => {
+    const { listSubscriptions, registerSubscriptionCharge } = await import('/js/services/subscriptions.js');
+    const { listDebtors } = await import('/js/services/debtors.js');
+    const { listDebts } = await import('/js/services/debtPayments.js');
+    const { auth } = await import('/js/firebase/client.js');
+    const uid = auth.currentUser.uid;
+    const disney = (await listSubscriptions(uid)).find((x) => x.name === 'Disney');
+    const results = await Promise.all([registerSubscriptionCharge(uid, disney.id), registerSubscriptionCharge(uid, disney.id)]);
+    const debtor = (await listDebtors(uid)).find((d) => d.name === 'Roberta');
+    const dues = (await listDebts(uid, debtor.id)).filter((d) => d.description === 'Disney').map((d) => String(d.dueDate));
+    return { oks: results.filter((r) => r.ok).length, dues };
+  });
+  assert.equal(new Set(chargeRace.dues).size, chargeRace.dues.length, `dívidas duplicadas para a mesma data: ${chargeRace.dues}`);
+  assert.ok(chargeRace.oks >= 1 && chargeRace.dues.length === 1 + chargeRace.oks, JSON.stringify(chargeRace)); // 1ª (ao criar) + as que de fato passaram
   await page.getByRole('button', { name: /Nova assinatura/ }).click();
   await page.fill('#name', 'Cloud pessoal');
   await page.fill('#amountCents', '9,90');

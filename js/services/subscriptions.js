@@ -82,13 +82,18 @@ export async function createSubscription(uid, rawData, deps = {}) {
   const checked = await validate(uid, rawData, deps);
   if (!checked.ok) return checked;
   const id = await createAudited(uid, COLLECTION, checked.data, deps);
-  return { ok: true, id };
+  // Com devedor, o vínculo GERA o valor a receber: lança a cobrança da próxima fatura (não as futuras nem as passadas).
+  const charge = checked.data.debtorId && checked.data.status === 'active'
+    ? await chargeAfterSave(uid, { id, ...checked.data }, deps) : null;
+  return { ok: true, id, ...(charge ? { charge } : {}) };
 }
 
 /** Retorna { ok, errors }. */
 export async function updateSubscription(uid, subscriptionId, rawData, deps = {}) {
   const checked = await validate(uid, rawData, deps);
   if (!checked.ok) return checked;
+  // Só um vínculo NOVO com devedor (nenhum → algum, ou trocado) lança a cobrança; editar outros campos não relança nada.
+  const previous = checked.data.debtorId ? await (deps.getById ?? getById)(uid, COLLECTION, subscriptionId) : null;
   // Vínculos OPCIONAIS (conta, cartão, devedor): ausente no formulário remove o campo (null → deleteField em `update`).
   await updateAudited(uid, COLLECTION, subscriptionId, {
     ...checked.data,
@@ -96,7 +101,9 @@ export async function updateSubscription(uid, subscriptionId, rawData, deps = {}
     cardId: checked.data.cardId ?? null,
     debtorId: checked.data.debtorId ?? null,
   }, deps);
-  return { ok: true };
+  const newLink = checked.data.debtorId && checked.data.debtorId !== previous?.debtorId && checked.data.status === 'active';
+  const charge = newLink ? await chargeAfterSave(uid, { id: subscriptionId, ...checked.data }, deps) : null;
+  return { ok: true, ...(charge ? { charge } : {}) };
 }
 
 export async function deleteSubscription(uid, subscriptionId, io = {}) {
@@ -125,23 +132,24 @@ export const pauseSubscription = (uid, id, io) => setSubscriptionStatus(uid, id,
 export const resumeSubscription = (uid, id, io) => setSubscriptionStatus(uid, id, 'active', io);
 export const cancelSubscription = (uid, id, io) => setSubscriptionStatus(uid, id, 'cancelled', io);
 
+/** Id determinístico da cobrança (assinatura × data): no máximo UM lançamento por assinatura e data, mesmo sob cliques repetidos. */
+export const chargeDocId = (subscriptionId, chargeDate) => `sub_${subscriptionId}_${chargeDate}`;
+
 /**
- * Registra a cobrança de uma assinatura ATIVA e avança `nextChargeDate` um período (auditoria `charge`).
- *  - Com `cardId` (VF-2-03r): lança UMA parcela (1x) na fatura do cartão — a fatura aberta do período; fatura
- *    fechada/paga NUNCA é alterada (a compra vai para a próxima aberta) — e avança a data no MESMO lote
- *    atômico. Não gera despesa em conta: o débito na conta acontece uma vez, ao pagar a fatura.
- *    Com `debtorId` (VF-COR-07), a parcela nasce VINCULADA ao devedor (valor a receber dele; o recebimento cai na
- *    conta escolhida ao receber, e a fatura é paga à parte — dois fluxos independentes).
- *  - Sem `cardId` e com `debtorId` (VF-COR-07): cria UMA dívida à vista para o devedor (vencimento = data da cobrança) e
- *    avança a data no MESMO lote atômico. O recebimento cai na conta escolhida ao receber.
- *  - Sem cartão e sem devedor: só avança a data; NÃO gera despesa nem altera saldo (`generatedExpense: false`). Se o
- *    gasto também for lançado em Despesas, é lá que ele conta — a assinatura não duplica.
+ * Lança a cobrança de `current` (assinatura ATIVA) em `current.nextChargeDate` e avança a data um período (auditoria `charge`).
+ * Lança SÓ essa cobrança — a da próxima fatura —, nunca cobranças futuras nem retroativas: a recorrência pode ser pausada ou
+ * cancelada, então não se gera nada que ainda não é conhecido. Destinos:
+ *  - Com `cardId` (VF-2-03r): UMA parcela (1x) na fatura aberta do período; fatura fechada/paga NUNCA é alterada (vai para
+ *    a próxima aberta); a data avança no MESMO lote atômico. Não gera despesa em conta (o débito é ao pagar a fatura).
+ *    Com `debtorId` (VF-COR-07), a parcela nasce VINCULADA ao devedor (a receber; o recebimento cai na conta escolhida ao
+ *    receber e a fatura é paga à parte — fluxos independentes).
+ *  - Sem `cardId` e com `debtorId` (VF-COR-07): UMA dívida à vista (vencimento = data da cobrança), no MESMO lote atômico.
+ *  - Sem cartão e sem devedor: só avança a data; NÃO gera despesa nem altera saldo (lance em Despesas se quiser refletir).
+ * Anti-duplicação: o documento de cobrança usa id determinístico (`chargeDocId`). Se já existe, a cobrança é recusada; e se
+ * duas chamadas concorrentes passarem pela checagem, a segunda falha no lote (regravar o id = update, negado pelas Rules).
  * Retorna { ok, nextChargeDate, via: 'card'|'debtor'|'account'|'none', invoiceIds?, debtGroupId?, errors }.
- * Leitura+escrita não atômica: duas cobranças simultâneas avançariam uma só vez.
  */
-export async function registerSubscriptionCharge(uid, subscriptionId, io = {}) {
-  const current = await (io.getById ?? getById)(uid, COLLECTION, subscriptionId);
-  if (!current) return { ok: false, errors: { _form: 'Assinatura não encontrada.' } };
+async function chargeSubscription(uid, current, io = {}) {
   if (current.status !== 'active') {
     return { ok: false, errors: { _form: 'Só é possível registrar cobrança de assinaturas ativas.' } };
   }
@@ -149,26 +157,54 @@ export async function registerSubscriptionCharge(uid, subscriptionId, io = {}) {
   if (!nextChargeDate) {
     return { ok: false, errors: { _form: 'Data ou periodicidade da assinatura inválida.' } };
   }
-  const advance = [{ type: 'update', collection: COLLECTION, docId: subscriptionId, data: { nextChargeDate }, action: 'charge' }];
-  if (current.cardId) {
-    const r = await registerCardPurchase(uid, current.cardId, {
-      description: current.name, amountCents: centsToMoneyString(current.amountCents), purchaseDate: current.nextChargeDate,
-      installmentsTotal: 1, categoryId: current.categoryId, notes: 'Assinatura',
-      ...(current.debtorId ? { debtorId: current.debtorId } : {}),
-    }, { ...io, extraOps: advance });
-    if (!r.ok) return r;
-    return { ok: true, nextChargeDate, via: 'card', invoiceIds: r.invoiceMonths, ...(current.debtorId ? { debtorId: current.debtorId } : {}) };
+  const docId = chargeDocId(current.id, current.nextChargeDate);
+  const duplicate = { ok: false, errors: { _form: `A cobrança de ${current.nextChargeDate.split('-').reverse().join('/')} desta assinatura já foi lançada.` } };
+  const exists = async (collection) => Boolean(await (io.getById ?? getById)(uid, collection, docId));
+  const advance = [{ type: 'update', collection: COLLECTION, docId: current.id, data: { nextChargeDate }, action: 'charge' }];
+
+  try {
+    if (current.cardId) {
+      if (await exists(COLLECTIONS.cardPurchases)) return duplicate;
+      const r = await registerCardPurchase(uid, current.cardId, {
+        description: current.name, amountCents: centsToMoneyString(current.amountCents), purchaseDate: current.nextChargeDate,
+        installmentsTotal: 1, categoryId: current.categoryId, notes: 'Assinatura',
+        ...(current.debtorId ? { debtorId: current.debtorId } : {}),
+      }, { ...io, extraOps: advance, purchaseDocIds: [docId] });
+      if (!r.ok) return r;
+      return { ok: true, nextChargeDate, via: 'card', invoiceIds: r.invoiceMonths, ...(current.debtorId ? { debtorId: current.debtorId } : {}) };
+    }
+    if (current.debtorId) {
+      if (await exists(COLLECTIONS.debts)) return duplicate;
+      const r = await createDebtPlan(uid, {
+        debtorId: current.debtorId, description: current.name, totalCents: centsToMoneyString(current.amountCents),
+        installments: 1, firstDueDate: current.nextChargeDate,
+      }, { ...io, extraOps: advance, debtDocIds: [docId] });
+      if (!r.ok) return r;
+      return { ok: true, nextChargeDate, via: 'debtor', debtorId: current.debtorId, debtGroupId: r.groupId, generatedExpense: false };
+    }
+    await updateAudited(uid, COLLECTION, current.id, { nextChargeDate }, io, 'charge');
+    return { ok: true, nextChargeDate, via: current.accountId ? 'account' : 'none', generatedExpense: false };
+  } catch (error) {
+    // Corrida: outra chamada gravou o MESMO id antes (regravar = update, negado pelas Rules) — nada foi duplicado nem somado.
+    if (error?.code === 'permission-denied' && (current.cardId || current.debtorId)) return duplicate;
+    throw error;
   }
-  if (current.debtorId) {
-    const r = await createDebtPlan(uid, {
-      debtorId: current.debtorId, description: current.name, totalCents: centsToMoneyString(current.amountCents),
-      installments: 1, firstDueDate: current.nextChargeDate,
-    }, { ...io, extraOps: advance });
-    if (!r.ok) return r;
-    return { ok: true, nextChargeDate, via: 'debtor', debtorId: current.debtorId, debtGroupId: r.groupId, generatedExpense: false };
+}
+
+/** Lançamento automático ao vincular o devedor: a assinatura JÁ foi salva, então uma falha vira resultado (não exceção). */
+async function chargeAfterSave(uid, current, io) {
+  try {
+    return await chargeSubscription(uid, current, io);
+  } catch (error) {
+    return { ok: false, errors: { _form: error?.message ?? 'Falha ao lançar a cobrança.' } };
   }
-  await updateAudited(uid, COLLECTION, subscriptionId, { nextChargeDate }, io, 'charge');
-  return { ok: true, nextChargeDate, via: current.accountId ? 'account' : 'none', generatedExpense: false };
+}
+
+/** Registra a cobrança de uma assinatura (lê o estado atual): ver `chargeSubscription`. */
+export async function registerSubscriptionCharge(uid, subscriptionId, io = {}) {
+  const current = await (io.getById ?? getById)(uid, COLLECTION, subscriptionId);
+  if (!current) return { ok: false, errors: { _form: 'Assinatura não encontrada.' } };
+  return chargeSubscription(uid, current, io);
 }
 
 export function getPeriodicityOptions() {

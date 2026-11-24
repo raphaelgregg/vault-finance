@@ -163,6 +163,22 @@ function chargeTargetText(item) {
   return [where, who].filter(Boolean).join(' · ') || 'Sem vínculo (só acompanhamento)';
 }
 
+/**
+ * Mensagem ao salvar. Vincular um devedor LANÇA a cobrança da próxima fatura (só ela: nada futuro nem retroativo) — o usuário
+ * precisa ver o que aconteceu, inclusive quando a assinatura foi salva mas a cobrança não pôde ser lançada.
+ */
+function saveMessage(isEdit, result, rawData) {
+  const base = isEdit ? 'Assinatura atualizada com sucesso.' : 'Assinatura criada com sucesso.';
+  const charge = result.charge;
+  if (!charge) return base;
+  const when = formatDate(rawData.nextChargeDate);
+  if (!charge.ok) return `${base} A cobrança de ${when} NÃO foi lançada: ${charge.errors?._form ?? Object.values(charge.errors ?? {})[0] ?? 'erro desconhecido'}`;
+  const who = debtorName(charge.debtorId ?? rawData.debtorId);
+  return charge.via === 'card'
+    ? `${base} Cobrança de ${when} lançada na fatura e vinculada a ${who} (a receber); próxima em ${formatDate(charge.nextChargeDate)}.`
+    : `${base} Cobrança de ${when} lançada como dívida de ${who} (a receber); próxima em ${formatDate(charge.nextChargeDate)}.`;
+}
+
 async function chargeNow(item) {
   const r = await registerSubscriptionCharge(currentUser.uid, item.id);
   if (r.ok) {
@@ -294,7 +310,7 @@ function openSubscriptionModal(item = null) {
       el('option', { value: '' }, 'Nenhum'),
       ...debtorsCache.filter((d) => (d.status !== 'cancelled' && !d.archived) || d.id === item?.debtorId).map((d) => el('option', { value: d.id, selected: item?.debtorId === d.id }, d.name)),
     ])),
-    el('p', { class: 'card__hint', text: 'Com devedor, cada cobrança vira valor a receber dele (parcela na fatura do cartão ou dívida à vista, se não houver cartão). Quando ele pagar, o dinheiro entra na conta escolhida no recebimento; a fatura do cartão é paga à parte.' }),
+    el('p', { class: 'card__hint', text: 'Ao vincular um devedor, a cobrança da PRÓXIMA fatura é lançada como valor a receber dele (parcela na fatura do cartão ou dívida à vista, se não houver cartão) — só ela: as seguintes entram quando você registrar cada cobrança, pois a assinatura pode ser pausada ou cancelada. Quando ele pagar, o dinheiro entra na conta escolhida no recebimento; a fatura do cartão é paga à parte.' }),
     el('div', { class: 'form__row' }, [
       field('Conta (opcional)', 'accountId', el('select', { id: 'accountId', name: 'accountId' }, [
         el('option', { value: '' }, 'Sem conta'),
@@ -357,7 +373,7 @@ function openSubscriptionModal(item = null) {
       : await createSubscription(currentUser.uid, rawData);
 
     if (result.ok) {
-      toast(isEdit ? 'Assinatura atualizada com sucesso.' : 'Assinatura criada com sucesso.');
+      toast(saveMessage(isEdit, result, rawData), result.charge ? 7000 : undefined);
       closeModal();
       await reload();
     } else {
