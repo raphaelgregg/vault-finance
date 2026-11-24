@@ -11,6 +11,7 @@ import { mountSidebar } from './components/sidebar.js';
 import { mountTopbar } from './components/topbar.js';
 import { navItemById } from './utils/nav.js';
 import { $, toast, refreshIcons } from './components/dom.js';
+import { startTableTools } from './components/table-tools.js';
 
 const MODULES = {
   dashboard: () => import('./modules/dashboard.js'),
@@ -65,6 +66,7 @@ async function bootstrap() {
 
   try {
     const module = await loadModule();
+    startTableTools(); // ordenação e filtro em todas as tabelas (páginas e modais)
     module.render($('#page-content'), { user });
     refreshIcons();
   } catch (error) {

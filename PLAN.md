@@ -396,6 +396,14 @@ Convenção de IDs: `VF-<fase>-<nn>`. Preservar IDs; não remover tarefas conclu
 - Aceite (cumprido): integração (Emulator) — cancelar/cancelMany devolvem o emprestado, `debt.reschedule` (data+valor, só data, só valor, idempotência, recusa com recebimento/paga/cancelada, validação, isolamento, corrida × recebimento 10×); unit 694; E2E — criar em 06/12, editar para 06/11 (mesma dívida, emprestado não dobra), editar valor, pausar (cancela e devolve), retomar (nova dívida, id com revisão), registrar cobrança (fecha o ciclo e lança a próxima), cancelar a assinatura.
 - **Dados existentes:** dívidas canceladas ANTES desta correção deixaram o emprestado inflado no devedor; o ajuste é manual (Editar devedor → valor emprestado = soma das parcelas ativas). Assinaturas já vinculadas pelo modelo anterior (data avançada) ganham a dívida da data atual ao serem editadas/retomadas ou ao registrar a cobrança. A VF-COR-08 fica substituída por esta no caminho sem cartão.
 
+- [x] **VF-UX-01 — Ordenação e filtro em todas as tabelas** (Médio) — CONCLUÍDA 2026-11-24
+- Pedido: filtro e ordenação nas tabelas de todo o projeto.
+- Solução: camada ÚNICA, sem reescrever os ~11 módulos que montam tabela à mão: `js/components/table-tools.js` (DOM) sobre `js/utils/tableSort.js` (lógica pura). `startTableTools()` (chamado em `app.js`) observa o documento e aprimora toda `table.table` que aparecer (página ou modal): cabeçalhos viram botões (asc → desc → ordem original, `aria-sort`), e uma barra com filtro de texto (sem acento/caixa, todos os termos, qualquer célula exceto Ações) e contador "N de M". O tipo da coluna é detectado pelo texto exibido: valor em R$/número (ordena como número), data dd/mm/aaaa, mês mm/aaaa ou texto (pt-BR, "item 2" antes de "item 10"); vazios ("—") sempre por último. Colunas "Ações" e "Sel." não ordenam; tabela com menos de 2 linhas não ganha barra; opt-out `data-no-tools`.
+- Limite: em tabelas paginadas por "Carregar mais" (Receitas, Despesas, Transferências) ordena/filtra as linhas JÁ CARREGADAS; os filtros de status/mês/categoria do servidor seguem separados.
+- Arquivos: js/utils/tableSort.js, js/components/table-tools.js, js/app.js, css/components.css, docs/ARCHITECTURE.md, package.json (novo E2E) e testes.
+- Aceite (cumprido): unit 701 (+7 de lógica: tipos, ordem numérica/data/texto, vazios, filtro); E2E novo `tests/e2e/tables.mjs` (Categorias: ordenar 3 estados + `aria-sort` + filtro; Contas: R$ como número; modal de Dívidas: valor, vencimento cronológico e filtro); E2E completo exit 0.
+- Bugs encontrados e corrigidos durante a validação: (1) o observador da tabela via as próprias reordenações e reaplicava em laço (página travava) — registros próprios descartados com `takeRecords()`; (2) o aviso "nenhuma correspondência" como `tr` no tbody contava como linha de dados e quebrou o teste de paginação (101 ≠ 100) — movido para fora da tabela.
+
 ### Fase 3 — Arquitetura, qualidade e refatoração
 
 - [x] **VF-3-01 — Reduzir duplicação nos services** (Médio) — CONCLUÍDA 2026-11-18: extrair helper de create/update/delete com auditoria reutilizando `firestore.js`, sem mudar API pública. Arquivos: `js/services/*.js`. Dependências: VF-1-01. Aceite: testes existentes passam sem alteração; diff líquido de linhas negativo.
@@ -505,3 +513,4 @@ Convenção de IDs: `VF-<fase>-<nn>`. Preservar IDs; não remover tarefas conclu
 - 2026-11-24 — VF-COR-09 concluída (recorrência mantém o dia 29–31 via `chargeDay`). Rules precisam ser publicadas antes do deploy.
 - 2026-11-24 — VF-COR-10 concluída (dívida do devedor acompanha a assinatura; cancelar devolve o emprestado; nova `debt.reschedule`). Requer deploy das funções.
 - 2026-11-24 — VF-4-06 (Node LTS 24/26) preparada; aguarda merge dos PRs anteriores.
+- 2026-11-24 — VF-UX-01 concluída (ordenação e filtro em todas as tabelas).

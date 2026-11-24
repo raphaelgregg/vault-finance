@@ -473,3 +473,55 @@ td.actions { white-space: nowrap; }
 .debt-modal .toolbar .form__field { margin: 0; }
 .debt-modal .toolbar .btn { padding: 8px 12px; }
 .debt-modal .toolbar__info { font-size: var(--fs-sm); color: var(--text-muted); align-self: center; }
+
+/* ---------- Ordenação e filtro de tabelas (components/table-tools.js) ---------- */
+.table-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  flex-wrap: wrap;
+}
+
+.table-filter {
+  flex: 1 1 200px;
+  max-width: 320px;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-sm);
+}
+
+.table-count {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+
+.th-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+
+.th-sort:hover { color: var(--text); }
+
+.th-sort__icon::before { content: "\2195"; opacity: 0.35; font-size: 11px; }
+.th-sort[data-direction="asc"] .th-sort__icon::before { content: "\25B2"; opacity: 1; }
+.th-sort[data-direction="desc"] .th-sort__icon::before { content: "\25BC"; opacity: 1; }
+
+th.num .th-sort { flex-direction: row-reverse; }
+
+.table tr[hidden] { display: none; }
+.table-empty-note { margin: 0; padding: var(--space-3); text-align: center; color: var(--text-muted); font-size: var(--fs-sm); }
