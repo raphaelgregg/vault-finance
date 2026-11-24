@@ -2,6 +2,7 @@
  * Assinaturas — VF-2-03a: CRUD integrado ao Firestore (users/{uid}/subscriptions).
  * Custo mensal/anual calculado a partir das ATIVAS (js/core/model.js); nada é gravado derivado.
  */
+import { brDateInput } from '../components/date-input.js';
 import { el, $, toast, refreshIcons } from '../components/dom.js';
 import { openModal, closeModal } from '../components/modal.js';
 import {
@@ -302,8 +303,7 @@ function openSubscriptionModal(item = null) {
     el('div', { class: 'form__row' }, [
       field('Periodicidade *', 'periodicity', el('select', { id: 'periodicity', name: 'periodicity', required: true },
         getPeriodicityOptions().map((o) => el('option', { value: o.value, selected: (item?.periodicity ?? 'monthly') === o.value }, o.label)))),
-      field('Próxima cobrança *', 'nextChargeDate', el('input', {
-        type: 'date', id: 'nextChargeDate', name: 'nextChargeDate', required: true,
+      field('Próxima cobrança *', 'nextChargeDate', brDateInput({ id: 'nextChargeDate', name: 'nextChargeDate', required: true,
         value: item?.nextChargeDate ?? today,
       })),
     ]),

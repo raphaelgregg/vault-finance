@@ -3,6 +3,7 @@
  * "Atrasada" é exibição derivada (pendente com vencimento passado); o status gravado só muda via
  * recebimento (paid) ou cancelamento. Registrar recebimento é atômico (js/services/debtPayments.js).
  */
+import { brDateInput } from '../components/date-input.js';
 import { el, toast, refreshIcons } from '../components/dom.js';
 import { openModal, closeModal } from '../components/modal.js';
 import {
@@ -83,7 +84,7 @@ async function openDebtorInstallmentsInner({ user, debtor, onChange, month = 'al
       focusId: 'accountId',
       fields: [
         el('p', { class: 'card__hint', text: `${pending.length} parcela(s) pendente(s) serão quitadas, totalizando ${formatCents(total)}. As compras de cartão não são afetadas.` }),
-        field('Data *', 'date', el('input', { type: 'date', id: 'date', name: 'date', value: todayIso() })),
+        field('Data *', 'date', brDateInput({ id: 'date', name: 'date', value: todayIso() })),
         field('Conta que recebe *', 'accountId', el('select', { id: 'accountId', name: 'accountId' }, selectOptions(activeAccounts, '', { placeholder: 'Selecione uma conta' }))),
         field('Observações', 'notes', el('textarea', { id: 'notes', name: 'notes', maxlength: 500, rows: 2 })),
       ],
@@ -109,7 +110,7 @@ async function openDebtorInstallmentsInner({ user, debtor, onChange, month = 'al
         field('Valor total (R$) *', 'totalCents', el('input', { type: 'text', id: 'totalCents', name: 'totalCents', placeholder: '0,00', autocomplete: 'off' })),
         field('Parcelas (1 = à vista) *', 'installments', el('input', { type: 'number', id: 'installments', name: 'installments', min: 1, max: 120, value: 1 })),
       ]),
-      field('1º vencimento *', 'firstDueDate', el('input', { type: 'date', id: 'firstDueDate', name: 'firstDueDate', value: todayIso() })),
+      field('1º vencimento *', 'firstDueDate', brDateInput({ id: 'firstDueDate', name: 'firstDueDate', value: todayIso() })),
       el('p', { class: 'card__hint', text: 'As parcelas vencem todo mês no mesmo dia; o total é somado ao valor emprestado do devedor.' }),
     ],
     submit: (d) => createDebtPlan(user.uid, {
@@ -131,7 +132,7 @@ async function openDebtorInstallmentsInner({ user, debtor, onChange, month = 'al
       fields: [
         el('p', { class: 'card__hint', text: `Vencimento ${item.dueDate ? formatDate(item.dueDate) : formatMonth(item.referenceMonth)} · restante da parcela ${formatCents(item.remainingCents)}${item.receivedCents > 0 ? ` (já recebido ${formatCents(item.receivedCents)} de ${formatCents(item.amountCents)})` : ''} · pendente do devedor ${formatCents(debtorPendingCents(debtor))}. Só esta parcela é afetada${early ? ' (antecipação)' : ''}.` }),
         field('Valor recebido (R$) *', 'amountCents', el('input', { type: 'text', id: 'amountCents', name: 'amountCents', value: formatCentsInput(item.remainingCents), autocomplete: 'off' })),
-        field('Data do pagamento *', 'date', el('input', { type: 'date', id: 'date', name: 'date', value: todayIso() })),
+        field('Data do pagamento *', 'date', brDateInput({ id: 'date', name: 'date', value: todayIso() })),
         field('Conta que recebe *', 'accountId', el('select', { id: 'accountId', name: 'accountId' }, selectOptions(activeAccounts, '', { placeholder: 'Selecione uma conta' }))),
         field('Observações', 'notes', el('textarea', { id: 'notes', name: 'notes', maxlength: 500, rows: 2 })),
       ],
@@ -166,7 +167,7 @@ async function openDebtorInstallmentsInner({ user, debtor, onChange, month = 'al
           ],
           rows: preview.items,
         }),
-        field('Data do pagamento *', 'date', el('input', { type: 'date', id: 'date', name: 'date', value: todayIso() })),
+        field('Data do pagamento *', 'date', brDateInput({ id: 'date', name: 'date', value: todayIso() })),
         field('Conta que recebe *', 'accountId', el('select', { id: 'accountId', name: 'accountId' }, selectOptions(activeAccounts, '', { placeholder: 'Selecione uma conta' }))),
         field('Observações', 'notes', el('textarea', { id: 'notes', name: 'notes', maxlength: 500, rows: 2 })),
       ],

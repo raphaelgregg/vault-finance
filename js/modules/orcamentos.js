@@ -2,6 +2,7 @@
  * Orçamentos — VF-2-03e. Limite por categoria/mês; gasto, restante e % são derivados
  * (despesas não canceladas pelo mês de vencimento). Só o limite é gravado.
  */
+import { brMonthInput } from '../components/date-input.js';
 import { el, toast, refreshIcons } from '../components/dom.js';
 import {
   field, iconButton, statCard, panelHeader, emptyBlock, dataTable, progressBar,
@@ -46,7 +47,7 @@ function renderPage() {
     actionLabel: 'Novo orçamento', onAction: () => openBudgetModal(),
   });
 
-  const monthInput = el('input', { type: 'month', id: 'budget-month', value: month, 'aria-label': 'Mês do orçamento' });
+  const monthInput = brMonthInput({ id: 'budget-month', value: month, 'aria-label': 'Mês do orçamento' });
   monthInput.addEventListener('change', async () => {
     if (!/^\d{4}-\d{2}$/.test(monthInput.value)) return;
     month = monthInput.value;

@@ -13,6 +13,7 @@ import { navItemById } from './utils/nav.js';
 import { $, toast, refreshIcons } from './components/dom.js';
 import { startTableTools } from './components/table-tools.js';
 import { mountBottomNav } from './components/bottom-nav.js';
+import { startDateInputs } from './components/date-input.js';
 import { registerPwa } from './pwa.js';
 
 registerPwa();
@@ -76,6 +77,7 @@ async function bootstrap() {
 
   try {
     const module = await loadModule();
+    startDateInputs(); // campos de data em DD/MM/AAAA (máscara, calendário e ISO no envio)
     startTableTools(); // ordenação e filtro em todas as tabelas (páginas e modais)
     await module.render($('#page-content'), { user });
     refreshIcons();

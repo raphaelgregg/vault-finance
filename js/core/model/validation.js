@@ -105,10 +105,10 @@ export function validateEntity(kind, data, context = {}) {
       }
     } else if (rule.kind === 'month') {
       if (typeof value !== 'string' || !/^[0-9]{4}-(0[1-9]|1[0-2])$/.test(value)) {
-        errors[field] = 'Mês inválido (use AAAA-MM).';
+        errors[field] = 'Mês inválido (use MM/AAAA).';
       }
     } else if (rule.kind === 'date') {
-      if (!isValidIsoDate(value)) errors[field] = 'Data inválida (use AAAA-MM-DD).';
+      if (!isValidIsoDate(value)) errors[field] = 'Data inválida (use DD/MM/AAAA).';
     } else if (rule.kind === 'ref') {
       if (typeof value !== 'string' || value.trim().length === 0 || value.length > rule.max) {
         errors[field] = 'Referência inválida.';

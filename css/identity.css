@@ -110,3 +110,14 @@ body[data-page="dashboard"] .panel__header .card__icon { display: none; }
   .auth__aside p, .auth__points { display: none; }
   .auth__main { padding: var(--space-4); }
 }
+
+/* ---------- Campos de data em DD/MM/AAAA (js/components/date-input.js) ---------- */
+.date-wrap { position: relative; display: flex; align-items: center; min-width: 0; }
+.date-wrap > input[data-br-date] { flex: 1 1 auto; min-width: 0; width: 100%; padding-right: 40px; }
+.date-wrap__btn {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 32px; height: 32px;
+  border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text-muted); cursor: pointer;
+}
+.date-wrap__btn:hover:not([disabled]) { color: var(--brand-600); background: var(--surface-2); }
+.date-wrap__btn[disabled] { opacity: 0.4; cursor: not-allowed; }
+.date-wrap__native { position: absolute; right: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }

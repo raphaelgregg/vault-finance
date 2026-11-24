@@ -2,6 +2,7 @@
  * Metas — VF-2-03c (UI). Valor guardado, progresso e restante são derivados das movimentações
  * (aportes − resgates); só o alvo/prazo/status da meta são gravados. Aportar/resgatar é atômico.
  */
+import { brDateInput } from '../components/date-input.js';
 import { el, toast, refreshIcons } from '../components/dom.js';
 import {
   field, iconButton, statCard, panelHeader, emptyBlock, dataTable, progressBar,
@@ -153,7 +154,7 @@ function openGoalModal(goal = null) {
       field('Nome *', 'name', el('input', { type: 'text', id: 'name', name: 'name', maxlength: 80, value: goal?.name ?? '', autocomplete: 'off' })),
       el('div', { class: 'form__row' }, [
         field('Objetivo (R$) *', 'targetCents', el('input', { type: 'text', id: 'targetCents', name: 'targetCents', placeholder: '0,00', value: goal ? formatCentsInput(goal.targetCents) : '', autocomplete: 'off' })),
-        field('Prazo', 'deadline', el('input', { type: 'date', id: 'deadline', name: 'deadline', value: goal?.deadline ?? '' })),
+        field('Prazo', 'deadline', brDateInput({ id: 'deadline', name: 'deadline', value: goal?.deadline ?? '' })),
       ]),
       field('Conta vinculada', 'accountId', el('select', { id: 'accountId', name: 'accountId' }, [el('option', { value: '' }, 'Nenhuma'), ...selectOptions(activeAccounts, goal?.accountId)])),
       el('p', { class: 'card__hint', text: 'Conta vinculada (ex.: caixinha ou investimento): o progresso segue o saldo dela, alimentado por Transferências; metas na mesma conta repartem o saldo em ordem de criação. Sem conta, use aportes e resgates.' }),
@@ -182,7 +183,7 @@ function openMovementModal(goal, type) {
     fields: [
       el('p', { class: 'card__hint', text: `Guardado: ${formatCents(savedOf(goal))} de ${formatCents(goal.targetCents)}.` }),
       field('Valor (R$) *', 'amountCents', el('input', { type: 'text', id: 'amountCents', name: 'amountCents', placeholder: '0,00', autocomplete: 'off' })),
-      field('Data *', 'date', el('input', { type: 'date', id: 'date', name: 'date', value: todayIso() })),
+      field('Data *', 'date', brDateInput({ id: 'date', name: 'date', value: todayIso() })),
       field(isDeposit ? 'Conta de origem *' : 'Conta de destino *', 'accountId', el('select', { id: 'accountId', name: 'accountId' },
         selectOptions(activeAccounts, goal.accountId, { placeholder: 'Selecione uma conta' }))),
       field('Observações', 'notes', el('textarea', { id: 'notes', name: 'notes', maxlength: 300, rows: 2 })),
