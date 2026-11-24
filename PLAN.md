@@ -422,6 +422,13 @@ Convenção de IDs: `VF-<fase>-<nn>`. Preservar IDs; não remover tarefas conclu
 - [x] **VF-4-04 — Testes de UI (Playwright)** (Baixo) — CONCLUÍDA 2026-11-19 sem dependência nova: `tests/e2e/harness.mjs`, `flows.mjs` (cadastro, configurações, orçamentos, metas, cartões, devedores, dashboard, relatórios, nav) e `movements.mjs` (bancos, receitas, despesas, transferências: CRUD pela UI, filtros, paginação por cursor, ordenação, saldo derivado, exclusão bloqueada); `npm run test:e2e` (emuladores; usa o `playwright` do ambiente e sai com aviso se ausente; SDK servido de `node_modules`). Limitação: não roda no CI; só Chromium; SDK local 10.14.1 (produção fixa 10.12.2); ícones Lucide (CDN) bloqueados no ambiente de teste; categorias/assinaturas pela UI não cobertas.
 - [x] **VF-4-05 — Lint/formatação** (Baixo) — CONCLUÍDA 2026-11-19 sem dependência: `scripts/lint.mjs` (`npm run lint`; sintaxe, tabs/espaços/quebra final, `console.log`, `debugger`, `eval`, `.only`, merge, imports não usados, JSON) com 7 testes; limpou nits em 21 arquivos. ESLint/Prettier NÃO adotados (exigem aprovação de dependência) — o lint não detecta identificadores indefinidos (o E2E pegou um import removido por engano).
 
+- [x] **VF-4-06 — Node LTS mais novo: CI em 24 e 26** (Baixo) — CONCLUÍDA em código 2026-11-24 (**Node 26 validado só pelo CI**)
+- Decisão do dono: usar sempre o Node LTS mais novo. Conferido em nodejs.org/dist/index.json: 26 "Lithium" (26.13.1), 24 "Krypton" (24.22.3) e 22 "Jod" (22.23.5) são LTS; a anotação anterior (22/24) estava desatualizada.
+- Solução: matriz do CI `[24, 26]` (unit e Rules+integração), `engines.node >=24`, README e CLAUDE.md atualizados. O Node 22 sai da matriz (o piso suportado passa a ser o 24).
+- Arquivos: .github/workflows/ci.yml, package.json, README.md, CLAUDE.md. Dependências já aceitam (firebase-tools 13.35.1: `>=18 || >=20 || >=22`).
+- Aceite: CI verde em Node 24 e 26 (lint, unit, Rules, integração). Local só tem Node 22 — o E2E (Playwright) não roda no CI.
+- Risco conhecido: nenhum teste foi executado em Node 26 antes do CI; se algo falhar, corrigir antes do merge. A Vercel escolhe o Node pelo `engines` (pode usar o mais novo que ela suportar).
+
 ### Registro de execução
 
 - **VF-1-01** (opção A, `before`/`after` completos): `writeAudit` (`js/services/firestore.js`) agora grava `{action, entity, entityId, before?, after?, actorUid, createdAt}` mapeando `collection→entity` e `docId→entityId` (call sites dos 5 services inalterados), remove `undefined` e, em falha, registra `console.error` e devolve `{ok:false, error}` (não lança, para não sinalizar erro após a escrita principal ter sucesso). `firestore.rules` aceita `before`/`after` opcionais do tipo map. Validação: 3 novos testes de Rules (payload com before/after, não-map negado, formato antigo negado). Limite conhecido: sem teste unitário do `writeAudit` contra o SDK (a cobertura do payload está nas Rules). **As Rules precisam ser publicadas** (`firebase deploy --only firestore:rules`) para valer em produção — não executado.
@@ -497,3 +504,4 @@ Convenção de IDs: `VF-<fase>-<nn>`. Preservar IDs; não remover tarefas conclu
 - 2026-11-24 — VF-COR-08 concluída (vínculo com devedor lança a cobrança da próxima fatura; id determinístico contra duplicidade).
 - 2026-11-24 — VF-COR-09 concluída (recorrência mantém o dia 29–31 via `chargeDay`). Rules precisam ser publicadas antes do deploy.
 - 2026-11-24 — VF-COR-10 concluída (dívida do devedor acompanha a assinatura; cancelar devolve o emprestado; nova `debt.reschedule`). Requer deploy das funções.
+- 2026-11-24 — VF-4-06 (Node LTS 24/26) preparada; aguarda merge dos PRs anteriores.

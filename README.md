@@ -45,8 +45,8 @@ fatura aberta são **derivados**, nunca gravados.
 
 ## 2. Pré-requisitos
 
-- Node.js 22+ (LTS; só para o emulador e testes; a aplicação não precisa de build). Testes executados
-  localmente no Node 22; o CI roda 22 e 24. Node 18 não é suportado (fim de vida; sem `crypto` global em ESM).
+- Node.js 24+ (LTS; só para o emulador e testes; a aplicação não precisa de build). O CI roda 24 e 26 (as duas LTS mais
+  novas). Node 22 e 18 não são suportados: o 18 está fora de vida (e sem `crypto` global em ESM) e o 22 saiu da matriz.
 - Java 11+ (emulador do Firestore, usado por `npm run test:rules`).
 - Java 11+ (exigido pelo emulador do Firestore).
 - Conta Google para criar o projeto no Firebase (plano **Spark**, gratuito).
@@ -132,7 +132,7 @@ Firebase real.
 O E2E **não** adiciona dependência ao projeto: usa o `playwright` já instalado no ambiente e, sem
 ele, sai com aviso. O harness serve o SDK do Firebase a partir de `node_modules` (a CDN pode estar
 bloqueada) e remove o SRI do import map só durante o teste. `E2E_SCREENSHOTS=<pasta>` salva capturas.
-O workflow `.github/workflows/ci.yml` roda lint, unit e Rules (Node 22 e 24, LTS); E2E fica fora do CI.
+O workflow `.github/workflows/ci.yml` roda lint, unit e Rules (Node 24 e 26, LTS); E2E fica fora do CI.
 
 ---
 
