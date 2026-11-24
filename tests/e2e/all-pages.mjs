@@ -86,7 +86,7 @@ try {
   text = await open('devedores');
   assert.match(text, /Devedor Telas/, 'a lista de devedores continua válida');
   assert.equal(await page.locator('#closing-unavailable[data-kind="denied"]').count(), 1);
-  assert.doesNotMatch(text, /R\$ 400,00.*A receber em/, 'nenhum total de fechamento');
+  assert.doesNotMatch(text, /A receber em \d{2}\/\d{4}\s+R\$/, 'nenhum total de fechamento (o card mostra "—")');
   await setRules(NEW_RULES);
   await page.click('#retry-closing');
   await page.waitForFunction(() => !document.querySelector('#closing-unavailable'));

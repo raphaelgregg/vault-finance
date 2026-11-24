@@ -1,9 +1,11 @@
 /* Ponto único de entrada de estilos.
-   Ordem importa: tokens -> base/layout -> componentes. */
+   Ordem importa: fontes -> tokens -> base/layout -> componentes -> identidade (dashboard, login, navegação móvel). */
 
+@import url("fonts.css");
 @import url("variables.css");
 @import url("layout.css");
 @import url("components.css");
+@import url("identity.css");
 
 /* Ajustes globais que não pertencem a um componente específico */
 html {

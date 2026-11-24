@@ -93,8 +93,9 @@ try {
   await goto('dashboard', DASH_READY);
   await page.waitForSelector('#dashboard-balance-unavailable');
   await assertNoBalance('Dashboard', /negada/);
-  assert.equal(await cardValue('Livre'), '—');
-  assert.equal(await cardValue('Vinculado a metas'), '—');
+  const heroSub = await page.locator('.hero__main').innerText(); // Livre/Vinculado ficam sob o saldo total
+  assert.match(heroSub, /Livre —/);
+  assert.match(heroSub, /Vinculado a metas —/);
 
   log('4) Firestore OFFLINE: erro explícito, sem saldo calculado com dados incompletos');
   await setRules(NEW_RULES);
