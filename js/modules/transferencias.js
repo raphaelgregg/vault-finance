@@ -6,6 +6,7 @@
  * - Validação client-side espelhando Security Rules (conta origem ≠ conta destino)
  * - Persistência em users/{uid}/transfers
  */
+import { brDateInput } from '../components/date-input.js';
 import { el, $, toast, refreshIcons } from '../components/dom.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { createStatCard } from '../components/stat-card.js';
@@ -470,9 +471,7 @@ function openTransferModal(transfer = null) {
       ]),
       el('div', { class: 'form__field' }, [
         el('label', { for: 'date', text: 'Data *' }),
-        el('input', {
-          type: 'date',
-          id: 'date',
+        brDateInput({ id: 'date',
           name: 'date',
           required: true,
           value: transfer?.date ?? todayInAppZone(),

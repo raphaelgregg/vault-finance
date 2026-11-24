@@ -2,6 +2,7 @@
  * Devedores — VF-2-03b: CRUD integrado ao Firestore (users/{uid}/debtors).
  * Pendente = emprestado − recebido (derivado, nunca gravado). Parcelas e recebimentos: devedores-parcelas.js (VF-2-03b2).
  */
+import { brDateInput, brMonthInput } from '../components/date-input.js';
 import { el, $, toast, refreshIcons } from '../components/dom.js';
 import { openModal, closeModal } from '../components/modal.js';
 import {
@@ -85,8 +86,7 @@ function renderPage() {
   ]);
 
   const monthTotal = [...statements.values()].reduce((t, st) => t + st.totalCents, 0);
-  const monthInput = el('input', {
-    type: 'month', id: 'closing-month', value: month, 'aria-label': 'Mês de fechamento',
+  const monthInput = brMonthInput({ id: 'closing-month', value: month, 'aria-label': 'Mês de fechamento',
     onChange: async (event) => {
       if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(event.target.value)) return;
       month = event.target.value;
@@ -294,8 +294,7 @@ function openDebtorModal(item = null) {
         value: item?.lentCents ? formatCentsInput(item.lentCents) : '', autocomplete: 'off',
       })),
     ]),
-    field('Data do empréstimo / cadastro *', 'loanDate', el('input', {
-      type: 'date', id: 'loanDate', name: 'loanDate', required: true, value: item?.loanDate ?? today,
+    field('Data do empréstimo / cadastro *', 'loanDate', brDateInput({ id: 'loanDate', name: 'loanDate', required: true, value: item?.loanDate ?? today,
     })),
     el('div', { class: 'form__field' }, [
       el('label', { for: 'notes', text: 'Observações' }),

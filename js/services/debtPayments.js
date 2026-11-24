@@ -91,7 +91,7 @@ export async function createDebtPlan(uid, rawData, io = {}) {
   const parts = splitInstallments(total, rawN);
   if (!parts) return { ok: false, errors: { totalCents: 'O valor deve ser de ao menos 1 centavo por parcela.' } };
   const first = /^(\d{4}-\d{2})-(\d{2})$/.exec(rawData.firstDueDate ?? '');
-  if (!first || !isValidIsoDate(rawData.firstDueDate)) return { ok: false, errors: { firstDueDate: 'Data inválida (use AAAA-MM-DD).' } };
+  if (!first || !isValidIsoDate(rawData.firstDueDate)) return { ok: false, errors: { firstDueDate: 'Data inválida (use DD/MM/AAAA).' } };
   const day = Number(first[2]);
 
   const groupId = io.groupId ? io.groupId() : `g${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
@@ -243,7 +243,7 @@ export function previewMonthSettlement({ debtor, ledger, month }) {
 
 /** Quita, em lote retomável, as parcelas pendentes de um mês ("AAAA-MM"): dívidas pelo vencimento e cartão pela fatura. */
 export async function settleMonthInstallments(uid, debtorId, month, rawData = {}, io = {}) {
-  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month ?? '')) return { ok: false, errors: { _form: 'Mês de referência inválido (use AAAA-MM).' } };
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month ?? '')) return { ok: false, errors: { _form: 'Mês de referência inválido (use MM/AAAA).' } };
   return runBatch(uid, debtorId, { month }, rawData, io, { month });
 }
 

@@ -414,7 +414,7 @@ export async function registerInvoiceConsolidation(uid, cardId, rawData = {}, io
   if (!card) return { ok: false, errors: { _form: 'Cartão não encontrado.' } };
   const month = String(rawData.referenceMonth ?? '');
   const purchaseDate = clampDayInMonth(month, Number(card.closingDay));
-  if (!purchaseDate) return { ok: false, errors: { referenceMonth: 'Mês inválido (use AAAA-MM).' } };
+  if (!purchaseDate) return { ok: false, errors: { referenceMonth: 'Mês inválido (use MM/AAAA).' } };
   const invoices = await (io.list ?? list)(uid, INVOICES, byCard(cardId));
   const existing = invoices.find((i) => i.referenceMonth === month);
   if (existing && existing.status !== 'open') {
@@ -434,7 +434,7 @@ export async function registerInvoiceConsolidation(uid, cardId, rawData = {}, io
  */
 export async function payInvoice(uid, invoiceId, rawData = {}, io = {}) {
   const date = rawData.date ? String(rawData.date) : undefined;
-  if (date && !isValidIsoDate(date)) return { ok: false, errors: { date: 'Data inválida (use AAAA-MM-DD).' } };
+  if (date && !isValidIsoDate(date)) return { ok: false, errors: { date: 'Data inválida (use DD/MM/AAAA).' } };
   if (!rawData.accountId) return { ok: false, errors: { accountId: 'Selecione a conta que pagou a fatura.' } };
   const r = await (io.finance ?? financeResult)('invoice.pay', {
     invoiceId, accountId: String(rawData.accountId), ...(date ? { date } : {}),

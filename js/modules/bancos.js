@@ -5,6 +5,7 @@
  * - Validação client-side espelhando Security Rules
  * - Persistência em users/{uid}/accounts
  */
+import { brDateInput } from '../components/date-input.js';
 import { el, $, toast, refreshIcons } from '../components/dom.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { createStatCard } from '../components/stat-card.js';
@@ -281,7 +282,7 @@ function openAdjustModal(account) {
     ]),
     el('div', { class: 'form__field' }, [
       el('label', { for: 'adjustOpeningDate', text: 'Considerar movimentações a partir de (opcional)' }),
-      el('input', { type: 'date', id: 'adjustOpeningDate', name: 'openingDate', value: account.openingDate ?? '' }),
+      brDateInput({ id: 'adjustOpeningDate', name: 'openingDate', value: account.openingDate ?? '' }),
       el('span', { class: 'form__error', 'data-for': 'openingDate' }),
     ]),
     preview,
@@ -401,7 +402,7 @@ function openAccountModal(account = null) {
       ]),
       el('div', { class: 'form__field' }, [
         el('label', { for: 'openingDate', text: 'Data de abertura' }),
-        el('input', { type: 'date', id: 'openingDate', name: 'openingDate', value: account?.openingDate ?? '', ...(isEdit ? { readonly: 'readonly' } : {}) }),
+        brDateInput({ id: 'openingDate', name: 'openingDate', value: account?.openingDate ?? '', ...(isEdit ? { readonly: 'readonly' } : {}) }),
         el('span', { class: 'card__hint', text: 'Opcional. Com data, só movimentações a partir dela entram no saldo; vazio = todas.' }),
         el('span', { class: 'form__error', 'data-for': 'openingDate' }),
       ]),

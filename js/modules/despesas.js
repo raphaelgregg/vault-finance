@@ -6,6 +6,7 @@
  * - Validação client-side espelhando Security Rules
  * - Persistência em users/{uid}/expenses
  */
+import { brDateInput } from '../components/date-input.js';
 import { el, $, toast, refreshIcons } from '../components/dom.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { createStatCard } from '../components/stat-card.js';
@@ -431,9 +432,7 @@ function openExpenseModal(expense = null) {
     el('div', { class: 'form__row' }, [
       el('div', { class: 'form__field' }, [
         el('label', { for: 'purchaseDate', text: 'Data da compra *' }),
-        el('input', {
-          type: 'date',
-          id: 'purchaseDate',
+        brDateInput({ id: 'purchaseDate',
           name: 'purchaseDate',
           required: true,
           value: expense?.purchaseDate ?? todayInAppZone(),
@@ -442,9 +441,7 @@ function openExpenseModal(expense = null) {
       ]),
       el('div', { class: 'form__field' }, [
         el('label', { for: 'dueDate', text: 'Data de vencimento *' }),
-        el('input', {
-          type: 'date',
-          id: 'dueDate',
+        brDateInput({ id: 'dueDate',
           name: 'dueDate',
           required: true,
           value: expense?.dueDate ?? todayInAppZone(),
@@ -455,9 +452,7 @@ function openExpenseModal(expense = null) {
     el('div', { class: 'form__row' }, [
       el('div', { class: 'form__field' }, [
         el('label', { for: 'paidDate', text: 'Data de pagamento' }),
-        el('input', {
-          type: 'date',
-          id: 'paidDate',
+        brDateInput({ id: 'paidDate',
           name: 'paidDate',
           value: expense?.paidDate ?? '',
         }),

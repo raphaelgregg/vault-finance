@@ -2,6 +2,7 @@
  * Dashboard — VF-2-03f. Somente leitura: tudo é derivado (js/services/dashboard.js).
  * Sem dado real mostra zeros/estado vazio; nada é DEMO.
  */
+import { brMonthInput } from '../components/date-input.js';
 import { el, refreshIcons } from '../components/dom.js';
 import { statCard, panelHeader, emptyBlock, dataTable, formatDate, formatMonth, mount } from '../components/form-kit.js';
 import { loadDashboard, formatCents, DASHBOARD_SOURCES } from '../services/dashboard.js';
@@ -76,8 +77,7 @@ function draw(container, data, rerender) {
   });
   const semesterSelect = el('select', { id: 'dashboard-semester', onChange: (event) => choose({ semester: Number(event.target.value) }) },
     [1, 2].map((n) => el('option', { value: n, text: n === 1 ? '1º semestre (jan–jun)' : '2º semestre (jul–dez)', selected: n === period.semester })));
-  const monthInput = el('input', {
-    type: 'month', id: 'dashboard-month', value: data.month, 'aria-label': 'Mês dos indicadores',
+  const monthInput = brMonthInput({ id: 'dashboard-month', value: data.month, 'aria-label': 'Mês dos indicadores',
     onChange: (event) => {
       if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(event.target.value)) return;
       choose({ mode: 'month', month: event.target.value });
