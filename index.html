@@ -7,19 +7,34 @@
     <meta name="description" content="Controle financeiro pessoal: contas, receitas, despesas, metas e relatórios." />
     <link rel="stylesheet" href="css/main.css" />
     <link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#1f7a5c" />
+    <link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon.png" />
   </head>
   <body>
     <main class="auth">
+      <aside class="auth__aside">
+        <p class="auth__aside-brand">Vault Finance</p>
+        <h2>Veja onde está o seu dinheiro.</h2>
+        <p>Contas, cartões, devedores e assinaturas em uma só tela, com o saldo sempre calculado a partir dos seus lançamentos.</p>
+        <ul class="auth__points">
+          <li>Saldo de cada conta e posição líquida</li>
+          <li>Limite, fatura e vencimento de cada cartão</li>
+          <li>Quem deve a você e quanto vence neste mês</li>
+          <li>Assinaturas e próximas cobranças</li>
+        </ul>
+      </aside>
+      <div class="auth__main">
       <section class="auth__card" aria-labelledby="auth-title">
         <div class="auth__brand">
           <span class="sidebar__logo" aria-hidden="true">VF</span>
           <div>
-            <h1 id="auth-title" style="font-size: var(--fs-lg); margin: 0">Vault Finance</h1>
-            <p class="card__hint" style="margin: 0">Controle financeiro pessoal</p>
+            <h1 id="auth-title" class="auth__title">Vault Finance</h1>
+            <p class="card__hint auth__tagline">Controle financeiro pessoal</p>
           </div>
         </div>
 
-        <div id="config-warning" class="badge" hidden style="margin-bottom: var(--space-4)"></div>
+        <div id="config-warning" class="badge auth__warning" hidden></div>
 
         <div class="auth__tabs" role="tablist" aria-label="Modo de acesso">
           <button type="button" role="tab" id="tab-login" aria-selected="true" aria-controls="form-login">Entrar</button>
@@ -37,7 +52,7 @@
             <input id="login-password" name="password" type="password" autocomplete="current-password" required minlength="6" />
           </div>
           <p class="form-error" id="login-error" role="alert"></p>
-          <button class="btn btn--primary" type="submit" style="width: 100%">Entrar</button>
+          <button class="btn btn--primary btn--block" type="submit">Entrar</button>
         </form>
 
         <form id="form-register" novalidate hidden>
@@ -55,7 +70,7 @@
             <span class="field__hint">Mínimo de 6 caracteres.</span>
           </div>
           <p class="form-error" id="register-error" role="alert"></p>
-          <button class="btn btn--primary" type="submit" style="width: 100%">Criar conta</button>
+          <button class="btn btn--primary btn--block" type="submit">Criar conta</button>
         </form>
 
         <form id="form-reset" novalidate hidden>
@@ -65,7 +80,7 @@
             <span class="field__hint">Enviaremos um link de redefinição do Firebase.</span>
           </div>
           <p class="form-error" id="reset-error" role="alert"></p>
-          <button class="btn btn--primary" type="submit" style="width: 100%">Enviar link</button>
+          <button class="btn btn--primary btn--block" type="submit">Enviar link</button>
         </form>
 
         <p class="auth__footer">
@@ -73,6 +88,7 @@
           é usada no navegador.
         </p>
       </section>
+      </div>
     </main>
 
     <script src="js/importmap.js"></script>

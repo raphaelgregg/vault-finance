@@ -67,7 +67,7 @@ export function emptyBlock(icon, title, text) {
 /** Célula: `render` pode devolver texto ou um nó DOM (ex.: barra de progresso). */
 function cell(column, item) {
   const value = column.render ? column.render(item[column.key], item) : (item[column.key] ?? '—');
-  const td = el('td', { class: [column.numeric ? 'num' : '', column.wrap ? 'wrap' : ''].filter(Boolean).join(' ') });
+  const td = el('td', { class: [column.numeric ? 'num' : '', column.wrap ? 'wrap' : ''].filter(Boolean).join(' '), 'data-label': column.label });
   if (value instanceof Node) td.append(value);
   else td.textContent = value;
   return td;
@@ -75,11 +75,12 @@ function cell(column, item) {
 
 /**
  * Tabela com render por coluna e coluna de ações opcional (`actions(item) → nós`).
+ * `stack`: em telas estreitas (≤ 640px) cada linha vira um mini-cartão (rótulo da coluna + valor), sem rolagem horizontal.
  * `compact`: densidade menor (modais largos). Coluna `wrap: true`: o texto pode quebrar linha (descrições longas).
  */
-export function dataTable({ columns, rows, actions, compact = false }) {
+export function dataTable({ columns, rows, actions, compact = false, stack = false }) {
   return el('div', { class: 'table-wrap' }, [
-    el('table', { class: compact ? 'table table--compact' : 'table' }, [
+    el('table', { class: ['table', compact ? 'table--compact' : '', stack ? 'table--stack' : ''].filter(Boolean).join(' ') }, [
       el('thead', {}, [el('tr', {}, [
         ...columns.map((c) => el('th', { class: c.numeric ? 'num' : '', text: c.label })),
         actions ? el('th', { text: 'Ações' }) : null,

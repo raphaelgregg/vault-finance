@@ -758,7 +758,7 @@ try {
   await page.goto(`${app.base}/pages/dashboard.html`);
   await page.waitForSelector('#dashboard-month');
   const dash = await page.locator('#page-content').innerText();
-  for (const re of [/Saldo total/i, /Livre/, /Vinculado a metas/, /Receitas/, /previsto/i, /Faturas a pagar/i, /Limite utilizado/i, /A receber em/i, /Total em aberto/i]) assert.match(dash, re);
+  for (const re of [/Saldo total/i, /Livre/, /Vinculado a metas/, /Receitas/, /previsto/i, /Faturas a pagar/i, /Limite utilizado/i, /A receber em/i, /A receber de devedores/i]) assert.match(dash, re);
   assert.doesNotMatch(dash, /\bnull\b/);
   assert.doesNotMatch(dash, /Não foi possível carregar:/);
 
