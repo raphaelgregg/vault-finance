@@ -52,6 +52,8 @@
 }
 
 .btn--icon {
+  min-width: 40px;
+  min-height: 40px;
   padding: 8px;
   background: transparent;
   color: var(--text-muted);
@@ -252,7 +254,9 @@
   position: relative;
   width: min(560px, 100%);
   max-height: 90vh;
+  max-height: min(90dvh, calc(100dvh - 2 * var(--space-4)));
   overflow-y: auto;
+  overscroll-behavior: contain;
   background: var(--surface);
   color: var(--text);
   border-radius: var(--radius-lg);
@@ -274,6 +278,10 @@
 
 .modal__header {
   border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface);
 }
 
 .modal__header h2 {
@@ -284,6 +292,11 @@
 .modal__footer {
   border-top: 1px solid var(--border);
   justify-content: flex-end;
+  flex-wrap: wrap;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  background: var(--surface);
 }
 
 .modal__body {
@@ -437,7 +450,8 @@
   background: var(--surface); color: var(--text); font: inherit;
 }
 .form__field--error input, .form__field--error select, .form__field--error textarea { border-color: var(--expense); }
-.form__error { color: var(--expense); font-size: var(--fs-xs); min-height: 1em; }
+.form__error { color: var(--expense); font-size: var(--fs-xs); }
+.form__error:empty { display: none; }
 .btn--secondary { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
 .btn--success { color: var(--income); }
 td.actions { white-space: nowrap; }
@@ -525,3 +539,22 @@ th.num .th-sort { flex-direction: row-reverse; }
 
 .table tr[hidden] { display: none; }
 .table-empty-note { margin: 0; padding: var(--space-3); text-align: center; color: var(--text-muted); font-size: var(--fs-sm); }
+
+/* Alvos de toque: caixas de seleção/rádio e botão de ordenar do cabeçalho com área mínima confortável. */
+input[type="checkbox"],
+input[type="radio"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--brand-600);
+  cursor: pointer;
+}
+
+.th-sort { min-height: 32px; }
+
+/* Modal aberto: o fundo não rola. */
+body.modal-open { overflow: hidden; }
+
+/* Barra de filtros dos módulos paginados (Receitas, Despesas, Transferências) — antes repetida como estilo inline. */
+.filter-body { padding: var(--space-4); }
+.filter-row { gap: var(--space-3); flex-wrap: wrap; }
+.filter-field { flex: 1; min-width: 180px; }

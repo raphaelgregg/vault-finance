@@ -285,4 +285,37 @@ p {
   .grid--cards {
     grid-template-columns: 1fr;
   }
+
+  /* Topbar em celular: o título encolhe com reticências (títulos longos como "Transferências" não cabem ao lado de menu,
+     tema, usuário e sair), o chip do usuário trunca e "Sair" vira só o ícone. */
+  .topbar {
+    padding: var(--space-2) var(--space-3);
+    gap: var(--space-2);
+  }
+
+  .topbar__title {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .topbar__spacer {
+    display: none;
+  }
+
+  .topbar .badge {
+    max-width: 96px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 0 1 auto;
+  }
+
+  .topbar .btn--ghost span {
+    display: none;
+  }
 }
+
+.sidebar__collapse { width: 100%; justify-content: flex-start; gap: 12px; }

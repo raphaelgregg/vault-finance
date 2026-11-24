@@ -668,6 +668,9 @@ try {
     const { auth } = await import('/js/firebase/client.js');
     await createDebtor(auth.currentUser.uid, { name: 'Marta', lentCents: '0,00', loanDate: '2026-11-01' });
   });
+  // o devedor foi criado por serviço: recarrega a página para o seletor de devedores do formulário enxergá-lo (cache da tela)
+  await page.goto(`${app.base}/pages/assinaturas.html`);
+  await page.waitForSelector('#page-content tbody tr');
   const marta = () => page.evaluate(async () => {
     const { listDebtors } = await import('/js/services/debtors.js');
     const { listDebts } = await import('/js/services/debtPayments.js');
