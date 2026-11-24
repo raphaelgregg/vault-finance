@@ -455,6 +455,12 @@ Convenção de IDs: `VF-<fase>-<nn>`. Preservar IDs; não remover tarefas conclu
 
 - **VF-ARQ-02 — resultados (2026-11-20, emuladores):** `npm run lint` OK · `npm run test:unit` 633/633 · `npm run test:rules` 109/109 · `npm run test:integration` 95/95 (concorrência 10× por cenário, oráculo independente) · `npm run test:e2e` 6/6 scripts OK (flows, movements, debtors, maintenance, auth, csv). Nada publicado (Rules, Vercel, Firebase).
 
+- [x] **VF-UX-03 — Dashboard claro e com período** (UX/feature) — CONCLUÍDA 2026-11-24 (validada: `npm run test:unit` 707 ok, `npm run lint` ok, `npm run test:e2e` completo ok; Rules/índices inalterados).
+  - Problema: ~25 cartões numéricos sem agrupamento; contas, cartões, devedores e assinaturas não apareciam individualmente; só havia seletor de mês.
+  - Solução: seletor de período (Mês, Semestre, Ano, Todo o período) que governa receitas × despesas (realizado e previsto pendente) e tabela mês a mês; blocos "Situação financeira" (saldo, resultado, faturas a pagar, a receber, posição líquida = saldo + a receber − faturas), "Pontos de atenção" e painéis de situação atual: Contas, Devedores, Cartões (usado/limite, fatura a pagar, vencimento) e Assinaturas (total mensal/anual, próximas cobranças). Orçamentos, faturas do mês, previsão de caixa e "a receber no mês" usam o mês escolhido (modo Mês) ou o vigente (demais modos).
+  - Limitações: totais de semestre/ano/todo o período respeitam o teto `READ_LIMIT`=1000 por coleção (aviso existente); "a receber no mês" de devedores só por mês; assinaturas ativas agora lidas até o teto (antes 8).
+  - Arquivos: utils/dates.js (`resolvePeriod`), core/aggregates.js, services/dashboard.js, modules/dashboard.js, css/layout.css, tests/model/aggregates.test.mjs, tests/e2e/flows.mjs.
+
 ## Itens não verificados
 
 - CI no GitHub Actions: confirmar o run do commit de correção (ver Histórico) em Node 18 e 22.
@@ -526,3 +532,4 @@ Convenção de IDs: `VF-<fase>-<nn>`. Preservar IDs; não remover tarefas conclu
 - 2026-11-24 — VF-4-06 (Node LTS 24/26) preparada; aguarda merge dos PRs anteriores.
 - 2026-11-24 — VF-UX-01 concluída (ordenação e filtro em todas as tabelas).
 - 2026-11-24 — VF-UX-02 (layout/modais/responsividade) e VF-QA-01 (qualidade + confirmação de cancelamentos) concluídas.
+- 2026-11-24 — VF-UX-03 concluída (dashboard redesenhado).

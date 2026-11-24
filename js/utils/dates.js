@@ -105,3 +105,38 @@ export function monthsBetween(from, to) {
   }
   return out;
 }
+
+export const PERIOD_MODES = Object.freeze(['month', 'semester', 'year', 'all']);
+
+/**
+ * Período dos indicadores do dashboard. Puro. `input`: { mode, month, year, semester (1|2) }; `currentMonth` "AAAA-MM".
+ * Retorna { mode, from, to, month, year, semester, start, end, label }: `from`/`to` são meses "AAAA-MM" e `start`/`end`
+ * dias "AAAA-MM-DD" (inclusivos); em "all" todos são null (sem limite). `month` só existe no modo mês.
+ */
+export function resolvePeriod(input = {}, currentMonth = currentMonthKey()) {
+  const mode = PERIOD_MODES.includes(input?.mode) ? input.mode : 'month';
+  const yearNum = Number(input?.year);
+  const year = Number.isInteger(yearNum) && yearNum >= 2000 && yearNum <= 2100 ? yearNum : Number(currentMonth.slice(0, 4));
+  const semester = Number(input?.semester) === 2 ? 2 : Number(input?.semester) === 1 ? 1 : (Number(currentMonth.slice(5, 7)) <= 6 ? 1 : 2);
+  let from = null;
+  let to = null;
+  let label = 'Todo o período';
+  let month = null;
+  if (mode === 'month') {
+    month = MONTH_RE.test(input?.month ?? '') ? input.month : currentMonth;
+    from = month; to = month;
+    label = `${month.slice(5, 7)}/${month.slice(0, 4)}`;
+  } else if (mode === 'semester') {
+    from = `${year}-${semester === 1 ? '01' : '07'}`; to = `${year}-${semester === 1 ? '06' : '12'}`;
+    label = `${semester}º semestre de ${year}`;
+  } else if (mode === 'year') {
+    from = `${year}-01`; to = `${year}-12`;
+    label = `Ano ${year}`;
+  }
+  return {
+    mode, from, to, month, year, semester,
+    start: from ? monthBounds(from).start : null,
+    end: to ? monthBounds(to).end : null,
+    label,
+  };
+}

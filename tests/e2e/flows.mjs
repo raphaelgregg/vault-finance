@@ -220,6 +220,23 @@ try {
   assert.match(await text(), /Fatura|Nada a vencer/);
 
   await shot('dashboard');
+  log('dashboard: período por semestre, ano e todo o período (contas, cartões, devedores e assinaturas sempre visíveis)');
+  for (const re of [/Contas/, /Cartões/, /Devedores/, /Assinaturas/, /Pontos de atenção/, /Posição líquida/]) assert.match(await text(), re);
+  await page.selectOption('#dashboard-period-mode', 'semester');
+  await page.waitForSelector('#dashboard-semester');
+  assert.match(await text(), /º semestre de \d{4}/);
+  await page.selectOption('#dashboard-semester', '1');
+  await page.waitForFunction(() => /1º semestre de/.test(document.querySelector('#page-content').innerText));
+  await page.selectOption('#dashboard-period-mode', 'year');
+  await page.waitForFunction(() => /Ano \d{4}/.test(document.querySelector('#page-content').innerText));
+  assert.match(await text(), /Mês a mês/);
+  await page.selectOption('#dashboard-period-mode', 'all');
+  await page.waitForFunction(() => /Todo o período/.test(document.querySelector('#page-content').innerText));
+  assert.doesNotMatch(await text(), /\bnull\b|undefined|NaN/);
+  assert.match(await text(), /R\$\s?4\.900,00/); // saldo em contas não depende do período
+  await shot('dashboard-all');
+  await page.selectOption('#dashboard-period-mode', 'month');
+  await page.waitForSelector('#dashboard-month');
   log('relatórios: período, totais por categoria e CSV');
   await go('relatorios');
   assert.match(await text(), /Mercado/);
