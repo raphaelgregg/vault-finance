@@ -23,7 +23,7 @@ import {
 import {
   listCards, createCard, updateCard, deleteCard, blockCard, unblockCard, cancelCard,
   registerCardPurchase, registerInvoiceConsolidation, consolidationDeltaCents, parseMoneyToCents,
-  deleteCardPurchase, closeInvoice, payInvoice, cancelInvoice, deleteInvoice,
+  deleteCardPurchase, updateCardPurchase, closeInvoice, payInvoice, cancelInvoice, deleteInvoice,
   listInvoices, listCardPurchases, getCardLimitUsage, getCardStatusOptions, getInvoiceStatusOptions, formatCents,
 } from '../services/creditCards.js';
 import { listAccounts } from '../services/accounts.js';
@@ -272,6 +272,29 @@ async function openInvoicesModal(card, { showCancelled = false } = {}) {
     onDone: async () => { toast('Consolidado lançado na fatura.'); await refreshModal(); },
   });
 
+  // Corrigir compra lançada (VF-UX-05): descrição, categoria e — só em compra à vista — a data (muda de fatura se preciso).
+  const canEditPurchase = (p) => !p.debtorId && p.notes !== 'Assinatura' && (!p.invoiceId || !invoiceById.has(p.invoiceId) || invoiceById.get(p.invoiceId).status === 'open');
+  const openPurchaseEdit = (p) => {
+    const single = p.installmentsTotal === 1;
+    const expenseCats = categories.filter((c) => c.kind === 'expense' || c.kind === 'both').map((c) => ({ value: c.id, label: c.name }));
+    formModal({
+      title: `Corrigir compra — ${p.description}`,
+      formId: 'purchase-edit-form',
+      submitLabel: 'Salvar correção',
+      focusId: 'purchaseDate',
+      fields: [
+        el('p', { class: 'card__hint', text: `Valor (${formatCents(p.amountCents)}) e parcelas não mudam aqui; para isso exclua e lance de novo. ${single ? 'Ao mudar a data a compra vai para a fatura do novo ciclo.' : `Parcela ${p.installmentNumber}/${p.installmentsTotal}: a data só pode ser corrigida excluindo as parcelas e lançando de novo.`}` }),
+        field('Descrição *', 'description', el('input', { type: 'text', id: 'description', name: 'description', maxlength: 120, autocomplete: 'off', value: p.description })),
+        field('Data da compra *', 'purchaseDate', el('input', { type: 'date', id: 'purchaseDate', name: 'purchaseDate', value: p.purchaseDate, ...(single ? {} : { disabled: true }) })),
+        field('Categoria', 'categoryId', el('select', { id: 'categoryId', name: 'categoryId' }, [el('option', { value: '' }, 'Sem categoria'), ...selectOptions(expenseCats, p.categoryId ?? '')])),
+      ],
+      submit: (d) => updateCardPurchase(user.uid, p.id, {
+        description: d.get('description').trim(), purchaseDate: single ? d.get('purchaseDate') : p.purchaseDate, categoryId: d.get('categoryId') || undefined,
+      }),
+      onDone: async () => { toast('Compra corrigida.'); await refreshModal(); },
+    });
+  };
+
   // Canceladas ficam ocultas por padrão (não somem do banco até serem excluídas); a lista é refeita ao agir.
   const visibleInvoices = showCancelled ? invoices : invoices.filter((i) => i.status !== 'cancelled');
   const hiddenCount = invoices.length - visibleInvoices.length;
@@ -331,7 +354,7 @@ async function openInvoicesModal(card, { showCancelled = false } = {}) {
         { key: 'notes', label: 'Origem', render: (v, p) => (p.debtorId ? 'Devedor' : v === 'Assinatura' ? 'Assinatura' : v === 'Lançamento consolidado da fatura' ? 'Consolidado' : 'Compra') },
       ],
       rows: sorted,
-      actions: (p) => [iconButton(`Excluir parcela ${p.installmentNumber}/${p.installmentsTotal} de ${p.description}`, 'trash-2', async () => {
+      actions: (p) => [canEditPurchase(p) ? iconButton(`Corrigir compra ${p.description}`, 'pencil', () => openPurchaseEdit(p)) : null, iconButton(`Excluir parcela ${p.installmentNumber}/${p.installmentsTotal} de ${p.description}`, 'trash-2', async () => {
         const r = await deleteCardPurchase(user.uid, p.id);
         if (r.ok) { toast('Parcela excluída.'); await refreshModal(); } else toast(r.errors._form, 6000);
       }, 'btn--danger')],
