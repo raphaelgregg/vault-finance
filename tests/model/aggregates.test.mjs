@@ -184,3 +184,56 @@ describe('dashboard por período e visões de situação', () => {
     assert.deepEqual(s.map((x) => [x.id, x.viaCard]), [['b', false], ['a', true]]);
   });
 });
+
+describe('upcomingDue — rótulo de fatura em formato brasileiro', () => {
+  it('mostra "Fatura MM/AAAA", nunca AAAA-MM', () => {
+    const up = upcomingDue({ today: '2026-11-19', invoices: [{ id: 'i1', status: 'closed', referenceMonth: '2026-11', dueDate: '2026-11-25', totalCents: 1000 }] });
+    assert.equal(up[0].label, 'Fatura 11/2026');
+  });
+});
+
+describe('cardsOverview — fatura a pagar não soma meses futuros (Mercado Pago 8x)', () => {
+  const usedFn = (card, ps) => { const usedCents = ps.reduce((t, p) => t + p.amountCents, 0); return { usedCents, availableCents: card.limitCents - usedCents }; };
+  const open = (month) => ({ id: `mp_${month}`, cardId: 'mp', status: 'open', referenceMonth: month, dueDate: `${month}-17` });
+  const months = ['2026-12', '2027-01', '2027-02', '2027-03', '2027-04', '2027-05', '2027-06', '2027-07'];
+  const purchases = [
+    { cardId: 'mp', invoiceId: 'mp_2026-12', amountCents: 11109 }, { cardId: 'mp', invoiceId: 'mp_2026-12', amountCents: 6951 }, // 12/2026: 111,09 + 69,51
+    ...months.slice(1).map((m) => ({ cardId: 'mp', invoiceId: `mp_${m}`, amountCents: 11105 })),
+  ];
+  const view = (today) => cardsOverview({ cards: [{ id: 'mp', name: 'Mercado Pago', status: 'active', limitCents: 570000 }], invoices: months.map(open), purchases, today, usedFn });
+
+  it('a pagar = só a próxima fatura (R$ 180,60); o resto é "meses seguintes" e continua no usado', () => {
+    const { rows, dueCents, laterCents } = view('2026-11-24');
+    assert.equal(rows[0].usedCents, 95795);
+    assert.equal(rows[0].dueCents, 18060);
+    assert.equal(rows[0].laterCents, 95795 - 18060);
+    assert.equal(rows[0].nextDueDate, '2026-12-17');
+    assert.equal(rows[0].overdue, false);
+    assert.deepEqual([dueCents, laterCents], [18060, 77735]);
+  });
+
+  it('com a fatura de 12/2026 vencida, entram a vencida + a próxima (01/2027)', () => {
+    const { rows } = view('2026-12-20');
+    assert.equal(rows[0].overdueCents, 18060);
+    assert.equal(rows[0].dueCents, 18060 + 11105);
+    assert.equal(rows[0].overdue, true);
+  });
+});
+
+describe('cardMonthInvoice — fatura do cartão no mês', () => {
+  it('aberta soma parcelas, fechada usa total, paga usa paidCents, cancelada/sem fatura = null', async () => {
+    const { cardMonthInvoice } = await import('../../js/core/model.js');
+    const purchases = [{ invoiceId: 'a', amountCents: 1000 }, { invoiceId: 'a', amountCents: 550 }, { invoiceId: 'b', amountCents: 9 }];
+    const invoices = [
+      { id: 'a', referenceMonth: '2026-12', status: 'open', dueDate: '2026-12-17' },
+      { id: 'b', referenceMonth: '2027-01', status: 'closed', totalCents: 777, dueDate: '2027-01-17' },
+      { id: 'c', referenceMonth: '2027-02', status: 'paid', totalCents: 500, paidCents: 480, dueDate: '2027-02-17' },
+      { id: 'd', referenceMonth: '2027-03', status: 'cancelled', totalCents: 1 },
+    ];
+    assert.deepEqual(cardMonthInvoice(invoices, purchases, '2026-12'), { invoiceId: 'a', status: 'open', totalCents: 1550, dueDate: '2026-12-17' });
+    assert.equal(cardMonthInvoice(invoices, purchases, '2027-01').totalCents, 777);
+    assert.equal(cardMonthInvoice(invoices, purchases, '2027-02').totalCents, 480);
+    assert.equal(cardMonthInvoice(invoices, purchases, '2027-03'), null);
+    assert.equal(cardMonthInvoice(invoices, purchases, '2030-01'), null);
+  });
+});

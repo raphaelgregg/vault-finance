@@ -21,7 +21,7 @@ const PUBLIC_API = [
   'GOAL_TRANSACTION_TYPES', 'INVOICE_STATUSES', 'RECURRENCES', 'REF_FIELDS', 'SCHEMAS', 'SUBSCRIPTION_PERIODICITIES',
   'SUBSCRIPTION_STATUSES', 'accountBalances', 'accountLabel', 'addMonths', 'advanceChargeDate',
   'allocateLinkedGoalBalances', 'applyGoalTransaction', 'applyPaymentToDebtor', 'buildEntity', 'cardInvoicesSummary',
-  'cardLimitUsage', 'centsToMoneyString', 'chargeAnchorDay', 'checkCategoryForMovement', 'clampDayInMonth', 'consolidationDeltaCents',
+  'cardLimitUsage', 'cardMonthInvoice', 'centsToMoneyString', 'chargeAnchorDay', 'checkCategoryForMovement', 'clampDayInMonth', 'consolidationDeltaCents',
   'debtorMonthStatement', 'debtorObligations', 'debtorOverview', 'debtorPendingCents', 'filterMovements',
   'formatCents', 'goalProgressPercent', 'goalSavedCents', 'installmentPaymentState', 'invoiceDatesFor',
   'invoiceMonthForPurchase', 'invoiceTotalCents', 'isAccountLinkedGoal', 'isKindCompatible', 'isValidIsoDate',

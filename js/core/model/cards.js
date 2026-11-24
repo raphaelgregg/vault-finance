@@ -62,6 +62,19 @@ export function cardLimitUsage(card, purchases = [], invoices = []) {
   return { usedCents, availableCents: Math.max(0, (Number(card?.limitCents) || 0) - usedCents) };
 }
 
+/**
+ * Fatura de UM cartão no mês de referência ("AAAA-MM"), ignorando canceladas. Total derivado: aberta soma as parcelas vinculadas;
+ * fechada usa `totalCents`; paga usa `paidCents` (ou o total). Retorna { invoiceId, status, totalCents, dueDate } ou null (sem fatura no mês).
+ */
+export function cardMonthInvoice(invoices = [], purchases = [], month) {
+  const invoice = invoices.find((i) => i.referenceMonth === month && i.status !== 'cancelled');
+  if (!invoice) return null;
+  const totalCents = invoice.status === 'open'
+    ? purchases.reduce((t, p) => (p.invoiceId === invoice.id ? t + (Number(p.amountCents) || 0) : t), 0)
+    : Number(invoice.status === 'paid' ? (invoice.paidCents ?? invoice.totalCents) : invoice.totalCents) || 0;
+  return { invoiceId: invoice.id, status: invoice.status, totalCents, dueDate: invoice.dueDate ?? null };
+}
+
 /** Total derivado de uma fatura aberta (soma das parcelas vinculadas). */
 export function invoiceTotalCents(purchases = []) {
   return purchases.reduce((total, p) => total + (Number(p?.amountCents) || 0), 0);
