@@ -21,7 +21,7 @@ const COLLECTION_LABELS = {
 };
 
 const PERIOD_LABELS = { month: 'Mês', semester: 'Semestre', year: 'Ano', all: 'Todo o período' };
-const PERIODICITY_LABELS = { weekly: 'semanal', monthly: 'mensal', yearly: 'anual' };
+const PERIODICITY_LABELS = { weekly: '/sem', monthly: '/mês', yearly: '/ano' };
 let selectedPeriod = { mode: 'month' }; // { mode, month, year, semester }; padrão: mês vigente
 let includeDebtors = false; // inclui o "a receber de devedores" no saldo projetado
 
@@ -107,16 +107,30 @@ function draw(container, data, rerender) {
     footer ? el('div', { class: 'panel__body' }, [footer]) : null,
   ]);
 
-  // ---- 1. Resumo da situação (o que importa primeiro) ----
-  const summary = sec('Situação financeira', [
-    statCard('Saldo em contas', money(data.totalBalanceCents), 'wallet', data.accountCount === null ? unavailable : `${data.accountCount} conta(s) ativa(s) · hoje`),
-    statCard(`Resultado — ${period.label}`, money(result?.resultCents), 'scale', result ? `Receitas ${formatCents(result.incomeCents)} − despesas ${formatCents(result.expenseCents)} (realizado)` : unavailable,
-      result ? (result.resultCents < 0 ? 'expense' : 'income') : undefined),
-    statCard('Faturas de cartão a pagar', data.cardsView ? formatCents(data.cardsView.dueCents) : '—', 'credit-card', data.cardsView ? 'Abertas + fechadas, todas as datas' : unavailable, data.cardsView?.dueCents > 0 ? 'expense' : undefined),
-    statCard('A receber de devedores', money(debtors?.pendingCents), 'hand-coins', debtors ? `${debtors.openCount} devedor(es) em aberto` : unavailable, 'income'),
-    statCard('Posição líquida', money(data.netPositionCents), 'landmark', data.netPositionCents === null ? unavailable : 'Saldo em contas + a receber − faturas a pagar',
-      data.netPositionCents === null ? undefined : (data.netPositionCents < 0 ? 'expense' : 'income')),
-  ], { id: 'dashboard-summary' });
+  // ---- 1. Resumo da situação: um número principal (saldo) e quatro de apoio ----
+  const tone = (cents) => (cents === null || cents === undefined ? '' : cents < 0 ? ' stat__value--expense' : ' stat__value--income');
+  const stat = (label, value, hint, toneClass = '') => el('div', { class: 'stat' }, [
+    el('dt', { class: 'stat__label', text: label }),
+    el('dd', { class: `stat__value${toneClass}`, text: value }),
+    hint ? el('dd', { class: 'stat__hint', text: hint }) : null,
+  ]);
+  const summary = el('section', { class: 'hero', id: 'dashboard-summary', 'aria-label': 'Situação financeira' }, [
+    el('article', { class: 'card hero__main' }, [
+      el('div', { class: 'card__head' }, [el('span', { text: 'Saldo total' })]),
+      el('div', { class: 'card__value hero__value', text: money(data.totalBalanceCents) }),
+      el('p', { class: 'hero__sub', text: data.accountCount === null ? unavailable : `${data.accountCount} conta(s) ativa(s), hoje` }),
+      el('p', { class: 'hero__sub' }, [
+        el('span', { text: `Livre ${money(data.freeBalanceCents)}` }),
+        el('span', { text: `Vinculado a metas ${money(data.linkedGoalsCents)}` }),
+      ]),
+    ]),
+    el('dl', { class: 'hero__stats' }, [
+      stat(`Resultado — ${period.label}`, money(result?.resultCents), result ? `Receitas ${formatCents(result.incomeCents)} − despesas ${formatCents(result.expenseCents)}` : unavailable, tone(result?.resultCents)),
+      stat('Faturas a pagar', data.cardsView ? formatCents(data.cardsView.dueCents) : '—', data.cardsView ? 'Abertas e fechadas, todas as datas' : unavailable, data.cardsView?.dueCents > 0 ? ' stat__value--expense' : ''),
+      stat('A receber de devedores', money(debtors?.pendingCents), debtors ? `${debtors.openCount} devedor(es) em aberto` : unavailable, debtors?.pendingCents > 0 ? ' stat__value--income' : ''),
+      stat('Posição líquida', money(data.netPositionCents), data.netPositionCents === null ? unavailable : 'Saldo + a receber − faturas a pagar', tone(data.netPositionCents)),
+    ]),
+  ]);
 
   // ---- 2. Pontos de atenção em linguagem simples ----
   const alerts = [];
@@ -136,11 +150,6 @@ function draw(container, data, rerender) {
   ]);
 
   // ---- 3. Contas, cartões, devedores e assinaturas (situação de hoje) ----
-  const balanceCards = sec('Saldo em contas', [
-    statCard('Saldo total', money(data.totalBalanceCents), 'wallet', data.accountCount === null ? unavailable : `${data.accountCount} conta(s) ativa(s)`),
-    statCard('Livre', money(data.freeBalanceCents), 'unlock', data.freeBalanceCents === null ? unavailable : 'Saldo total − vinculado a metas'),
-    statCard('Vinculado a metas', money(data.linkedGoalsCents), 'target', data.linkedGoalsCents === null ? unavailable : 'Caixinhas/investimentos com meta'),
-  ]);
   const accountsPanel = panel('Contas', 'landmark', 'Saldo atual de cada conta ativa (derivado das movimentações).',
     data.accounts === null
       ? el('p', { class: 'card__hint', role: 'status', text: unavailable })
@@ -151,7 +160,7 @@ function draw(container, data, rerender) {
             { key: 'typeLabel', label: 'Tipo' },
             { key: 'balanceCents', label: 'Saldo', numeric: true, render: (v) => formatCents(v) },
           ],
-          rows: data.accounts, compact: true,
+          rows: data.accounts, compact: true, stack: true,
         })
         : emptyBlock('landmark', 'Nenhuma conta ativa', 'Cadastre uma conta em Bancos.'),
     link('bancos.html', 'Ver Bancos'));
@@ -169,7 +178,7 @@ function draw(container, data, rerender) {
             { key: 'dueCents', label: 'Fatura a pagar', numeric: true, render: (v) => formatCents(v) },
             { key: 'nextDueDate', label: 'Vence', render: (v, r) => (v ? `${formatDate(v)}${r.overdue ? ' (vencida)' : ''}` : '—') },
           ],
-          rows: cardsView.rows, compact: true,
+          rows: cardsView.rows, compact: true, stack: true,
         })
         : emptyBlock('credit-card', 'Nenhum cartão ativo', 'Cadastre um cartão em Cartões.'),
     link('cartoes.html', 'Ver Cartões'));
@@ -186,7 +195,7 @@ function draw(container, data, rerender) {
             { key: 'monthDueCents', label: `A receber em ${formatMonth(data.month)}`, numeric: true, render: (v) => (v === null ? '—' : formatCents(v)) },
             { key: 'pendingCents', label: 'Total a receber', numeric: true, render: (v) => formatCents(v) },
           ],
-          rows: data.debtorsList.slice(0, 8), compact: true,
+          rows: data.debtorsList.slice(0, 8), compact: true, stack: true,
         })
         : emptyBlock('hand-coins', 'Ninguém te deve', 'Devedores em aberto aparecem aqui.'),
     el('div', {}, [
@@ -203,11 +212,11 @@ function draw(container, data, rerender) {
         ? dataTable({
           columns: [
             { key: 'name', label: 'Assinatura' },
-            { key: 'amountCents', label: 'Valor', numeric: true, render: (v, r) => `${formatCents(v)} (${PERIODICITY_LABELS[r.periodicity] ?? r.periodicity})` },
+            { key: 'amountCents', label: 'Valor', numeric: true, render: (v, r) => `${formatCents(v)}${PERIODICITY_LABELS[r.periodicity] ?? ''}` },
             { key: 'viaCard', label: 'Cobrança', render: (v) => (v ? 'Cartão' : 'Conta') },
             { key: 'nextChargeDate', label: 'Próxima', render: (v) => formatDate(v) },
           ],
-          rows: subs.slice(0, 8), compact: true,
+          rows: subs.slice(0, 8), compact: true, stack: true,
         })
         : emptyBlock('repeat', 'Nenhuma assinatura ativa', 'Cadastre em Assinaturas.'),
     el('div', {}, [
@@ -216,8 +225,8 @@ function draw(container, data, rerender) {
     ]));
 
   cardsPanel.classList.add('panel--wide');
-  subsPanel.classList.add('panel--wide');
-  const snapshot = el('div', { class: 'grid grid--panels', id: 'dashboard-snapshot' }, [accountsPanel, debtorsPanel, cardsPanel, subsPanel]);
+  debtorsPanel.classList.add('panel--wide');
+  const snapshot = el('div', { class: 'grid grid--panels', id: 'dashboard-snapshot' }, [accountsPanel, subsPanel, debtorsPanel, cardsPanel]);
 
   // ---- 4. Receitas × despesas do período ----
   const monthSection = sec(`Receitas × despesas — ${period.label}`, [
@@ -237,23 +246,20 @@ function draw(container, data, rerender) {
         ],
         rows: [...series, {
           month: null, incomeCents: result?.incomeCents ?? 0, expenseCents: result?.expenseCents ?? 0, resultCents: result?.resultCents ?? 0,
-        }], compact: true,
+        }], compact: true, stack: true,
       }))
     : null;
   const monthRefNote = period.mode === 'month'
     ? null
     : el('p', { class: 'card__hint', text: `Orçamentos, faturas do mês, previsão de caixa e "a receber no mês" abaixo usam o mês vigente (${formatMonth(data.month)}); escolha o modo "Mês" para outro mês.` });
-  const cardSection = sec(`Cartões no mês — ${formatMonth(data.month)}`, [
-    statCard('Faturas a pagar', inv ? formatCents(inv.dueCents) : '—', 'receipt',
-      inv ? `${inv.count} fatura(s) do mês · abertas ${formatCents(inv.openCents)} · fechadas ${formatCents(inv.closedCents)} · pagas ${formatCents(inv.paidCents)}` : unavailable),
+  const refSection = sec(`Mês de referência — ${formatMonth(data.month)}`, [
+    statCard('Faturas do mês', inv ? formatCents(inv.dueCents) : '—', 'receipt',
+      inv ? `${inv.count} fatura(s) · abertas ${formatCents(inv.openCents)} · fechadas ${formatCents(inv.closedCents)} · pagas ${formatCents(inv.paidCents)}` : unavailable),
     statCard('Limite utilizado', inv ? formatCents(inv.usedCents) : '—', 'gauge',
       inv ? `de ${formatCents(inv.limitCents)} · disponível ${formatCents(inv.availableCents)}` : unavailable),
     statCard('Orçamentos', budgets && (budgets.spentCents > 0 || budgets.limitCents > 0) ? formatCents(budgets.spentCents) : '—', 'gauge',
       !budgets ? unavailable : budgets.limitCents > 0 ? `de ${formatCents(budgets.limitCents)} · ${budgets.overCount} estourado(s)` : 'Nenhum orçamento no mês'),
-  ]);
-  const debtorSection = sec(`Devedores — ${formatMonth(data.month)}`, [
     statCard(`A receber em ${formatMonth(data.month)}`, money(debtors?.monthDueCents), 'calendar-check', debtors?.monthDueCents == null ? unavailable : 'Fechamento do mês (cartão + dívidas), limitado ao pendente'),
-    statCard('Total em aberto', money(debtors?.pendingCents), 'hand-coins', debtors ? `${debtors.openCount} devedor(es) em aberto` : unavailable),
   ]);
   const f = data.monthlyForecast;
   const forecastSection = !f
@@ -341,12 +347,19 @@ function draw(container, data, rerender) {
             { key: 'label', label: 'Descrição' },
             { key: 'amountCents', label: 'Valor', numeric: true, render: (v) => formatCents(v) },
           ],
-          rows: data.upcoming,
+          rows: data.upcoming, stack: true,
         })
         : emptyBlock('calendar-check', 'Nada a vencer', 'Despesas pendentes, assinaturas ativas e faturas fechadas aparecem aqui.'),
     ]),
   ]);
 
-  mount(container, header, monthBar, failedNotice, balanceUnavailableNotice, notice, summary, attention, snapshot, balanceCards, monthSection, seriesPanel, monthRefNote, ...[].concat(forecastSection), cardSection, debtorSection, note, upcoming);
+  const forecastParts = [].concat(forecastSection);
+  const forecastBlocks = forecastParts.length === 3
+    ? [forecastParts[0], el('details', { class: 'dash-details', id: 'dashboard-forecast-details' }, [
+      el('summary', { text: 'Como o saldo foi calculado e compromissos dos próximos meses' }), forecastParts[1], forecastParts[2],
+    ])]
+    : forecastParts;
+
+  mount(container, header, monthBar, failedNotice, balanceUnavailableNotice, notice, summary, attention, snapshot, monthSection, seriesPanel, monthRefNote, refSection, ...forecastBlocks, note, upcoming);
   refreshIcons();
 }
