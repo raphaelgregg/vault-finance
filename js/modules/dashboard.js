@@ -126,9 +126,9 @@ function draw(container, data, rerender) {
     ]),
     el('dl', { class: 'hero__stats' }, [
       stat(`Resultado — ${period.label}`, money(result?.resultCents), result ? `Receitas ${formatCents(result.incomeCents)} − despesas ${formatCents(result.expenseCents)}` : unavailable, tone(result?.resultCents)),
-      stat('Faturas a pagar', data.cardsView ? formatCents(data.cardsView.dueCents) : '—', data.cardsView ? 'Abertas e fechadas, todas as datas' : unavailable, data.cardsView?.dueCents > 0 ? ' stat__value--expense' : ''),
+      stat('Faturas a pagar', data.cardsView ? formatCents(data.cardsView.dueCents) : '—', data.cardsView ? 'Vencidas e a próxima fatura de cada cartão (parcelas futuras não entram)' : unavailable, data.cardsView?.dueCents > 0 ? ' stat__value--expense' : ''),
       stat('A receber de devedores', money(debtors?.pendingCents), debtors ? `${debtors.openCount} devedor(es) em aberto` : unavailable, debtors?.pendingCents > 0 ? ' stat__value--income' : ''),
-      stat('Posição líquida', money(data.netPositionCents), data.netPositionCents === null ? unavailable : 'Saldo + a receber − faturas a pagar', tone(data.netPositionCents)),
+      stat('Posição líquida', money(data.netPositionCents), data.netPositionCents === null ? unavailable : 'Saldo + a receber − faturas a pagar (vencidas e próximas)', tone(data.netPositionCents)),
     ]),
   ]);
 
@@ -138,7 +138,7 @@ function draw(container, data, rerender) {
   if (data.monthlyForecast && data.monthlyForecast.projectedBalanceCents < 0) alerts.push(`O saldo projetado ao fim de ${formatMonth(data.month)} fica negativo (${formatCents(data.monthlyForecast.projectedBalanceCents)}).`);
   if (data.monthlyForecast?.expenses.overdueCents > 0) alerts.push(`Há despesas vencidas e não pagas: ${formatCents(data.monthlyForecast.expenses.overdueCents)}.`);
   for (const c of data.cardsView?.rows ?? []) {
-    if (c.overdue) alerts.push(`Fatura do cartão ${c.name} venceu em ${formatDate(c.nextDueDate)} (${formatCents(c.dueCents)} a pagar).`);
+    if (c.overdue) alerts.push(`Fatura do cartão ${c.name} venceu em ${formatDate(c.nextDueDate)} (${formatCents(c.overdueCents)} vencido).`);
     if (c.usedPercent >= 80) alerts.push(`Cartão ${c.name} com ${c.usedPercent}% do limite usado.`);
   }
   if (budgets?.overCount > 0) alerts.push(`${budgets.overCount} orçamento(s) estourado(s) em ${formatMonth(data.month)}.`);
@@ -166,7 +166,7 @@ function draw(container, data, rerender) {
     link('bancos.html', 'Ver Bancos'));
 
   const cardsView = data.cardsView;
-  const cardsPanel = panel('Cartões', 'credit-card', 'Limite usado, fatura a pagar e próximo vencimento de cada cartão ativo.',
+  const cardsPanel = panel('Cartões', 'credit-card', 'Usado = tudo que está comprometido no limite (inclui parcelas futuras). Fatura a pagar = vencidas e a próxima de cada cartão.',
     cardsView === null
       ? el('p', { class: 'card__hint', role: 'status', text: unavailable })
       : cardsView.rows.length
@@ -175,7 +175,7 @@ function draw(container, data, rerender) {
             { key: 'name', label: 'Cartão' },
             { key: 'usedCents', label: 'Usado / limite', numeric: true, render: (v, r) => `${formatCents(v)} / ${formatCents(r.limitCents)} (${r.usedPercent}%)` },
             { key: 'availableCents', label: 'Disponível', numeric: true, render: (v) => formatCents(v) },
-            { key: 'dueCents', label: 'Fatura a pagar', numeric: true, render: (v) => formatCents(v) },
+            { key: 'dueCents', label: 'Fatura a pagar', numeric: true, render: (v, r) => (r.laterCents > 0 ? `${formatCents(v)} (+ ${formatCents(r.laterCents)} nos meses seguintes)` : formatCents(v)) },
             { key: 'nextDueDate', label: 'Vence', render: (v, r) => (v ? `${formatDate(v)}${r.overdue ? ' (vencida)' : ''}` : '—') },
           ],
           rows: cardsView.rows, compact: true, stack: true,
