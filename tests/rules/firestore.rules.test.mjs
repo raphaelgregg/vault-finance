@@ -610,6 +610,25 @@ describe('Assinaturas (VF-2-03a)', () => {
     await assertSucceeds(deleteDoc(subDoc(db)));
   });
 
+  it('VF-COR-07: conta OPCIONAL e devedor opcional; referências inexistentes/inválidas/de outro usuário seguem negadas; vínculos podem ser removidos', async () => {
+    const db = asUser(ALICE);
+    const { accountId: _omit, ...semConta } = sub();
+    await assertSucceeds(setDoc(subDoc(db, 'sem-conta'), semConta)); // antes: conta obrigatória
+    await assertFails(setDoc(subDoc(db, 'x1'), sub({ accountId: 'zzz' })));
+    await assertFails(setDoc(subDoc(db, 'x2'), sub({ accountId: 5 })));
+    await assertFails(setDoc(subDoc(db, 'x3'), sub({ accountId: '' })));
+    await assertFails(setDoc(subDoc(db, 'x4'), sub({ debtorId: 'zzz' })));
+    await assertFails(setDoc(subDoc(db, 'x5'), { ...semConta, debtorId: 7 }));
+    await seedDoc(`users/${ALICE}/debtors/dv`, { name: 'Roberta', loanDate: new Date('2026-11-10T12:00:00.000Z'), lentCents: 0, receivedCents: 0, status: 'open' });
+    await seedDoc(`users/${BOB}/debtors/dv-bob`, { name: 'Do Bob', loanDate: new Date('2026-11-10T12:00:00.000Z'), lentCents: 0, receivedCents: 0, status: 'open' });
+    await assertSucceeds(setDoc(subDoc(db, 'com-devedor'), sub({ debtorId: 'dv' })));
+    await assertSucceeds(setDoc(subDoc(db, 'so-devedor'), { ...semConta, debtorId: 'dv' })); // sem conta e sem cartão
+    await assertFails(setDoc(subDoc(db, 'x6'), sub({ debtorId: 'dv-bob' }))); // devedor de OUTRO usuário
+    await assertFails(setDoc(subDoc(db, 'x7'), sub({ extra: 1 }))); // schema continua fechado
+    await assertSucceeds(updateDoc(subDoc(db, 'com-devedor'), { debtorId: deleteField(), accountId: deleteField(), updatedAt: serverTimestamp() }));
+    await assertFails(updateDoc(subDoc(db, 'com-devedor'), { debtorId: 'dv-bob', updatedAt: serverTimestamp() }));
+  });
+
   it('assinatura no cartão (VF-2-03r): cardId opcional existente; nega cartão inexistente; remove o vínculo; cobrança = parcela + avanço da data no MESMO lote', async () => {
     const db = asUser(ALICE);
     const stamps = () => ({ createdAt: serverTimestamp(), updatedAt: serverTimestamp() });

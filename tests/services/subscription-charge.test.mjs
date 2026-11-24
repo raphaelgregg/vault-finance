@@ -9,7 +9,7 @@ import { advanceChargeDate } from '../../js/core/model.js';
 import { toFirestoreData } from '../../js/services/firestore.js';
 
 const uid = 'u1';
-const sub = (o = {}) => ({ id: 's1', status: 'active', periodicity: 'monthly', nextChargeDate: '2026-11-18', ...o });
+const sub = (o = {}) => ({ id: 's1', status: 'active', periodicity: 'monthly', nextChargeDate: '2026-11-18', accountId: 'a1', ...o });
 function makeIo(current) {
   const calls = { update: [], audit: [] };
   return {
@@ -101,5 +101,102 @@ describe('deleteCategory — assinaturas vinculadas', () => {
     console.error = orig;
     assert.equal(r.ok, false);
     assert.equal(calls.remove, 0);
+  });
+});
+
+describe('registerSubscriptionCharge — destinos: cartão, devedor e sem vínculo (VF-COR-07)', () => {
+  const cardX = { id: 'c1', name: 'Nubank', brand: 'M', limitCents: 500000, closingDay: 10, dueDay: 17, status: 'active' };
+  const base = (o = {}) => ({ id: 's1', name: 'Netflix', amountCents: 5590, periodicity: 'monthly', nextChargeDate: '2026-11-05', categoryId: 'cat', status: 'active', ...o });
+  const mk = (subscription, debtor = { id: 'dv', name: 'Roberta', status: 'open', lentCents: 0, receivedCents: 0 }) => {
+    const atomic = [];
+    const updates = [];
+    const audits = [];
+    return {
+      atomic, updates, audits,
+      io: {
+        getById: async (u, c, id) => ({ subscriptions: [subscription], creditCards: [cardX], categories: [{ id: 'cat', kind: 'expense' }], debtors: debtor ? [debtor] : [] }[c] ?? []).find((x) => x.id === id) ?? null,
+        list: async () => [],
+        commitAtomic: async (u, ops) => { atomic.push(ops); return ops.map((o, i) => o.docId ?? `n${i}`); },
+        update: async (u, c, id, data) => updates.push({ c, id, data }),
+        writeAudit: async (u, e) => { audits.push(e); return { ok: true }; },
+        now: () => new Date('2026-11-05T12:00:00Z'),
+      },
+    };
+  };
+  const advance = { type: 'update', collection: 'subscriptions', docId: 's1', data: { nextChargeDate: '2026-12-05' }, action: 'charge' };
+
+  it('CARTÃO + DEVEDOR (Netflix da Roberta): a parcela na fatura nasce VINCULADA ao devedor, soma no emprestado e a data avança no MESMO lote', async () => {
+    const { io, atomic, updates } = mk(base({ cardId: 'c1', accountId: 'a1', debtorId: 'dv' }));
+    const r = await registerSubscriptionCharge(uid, 's1', io);
+    assert.deepEqual([r.ok, r.via, r.debtorId, r.nextChargeDate], [true, 'card', 'dv', '2026-12-05']);
+    const ops = atomic.at(-1);
+    const buy = ops.find((o) => o.collection === 'cardPurchases');
+    assert.deepEqual([buy.data.debtorId, buy.data.amountCents, buy.data.installmentsTotal], ['dv', 5590, 1]);
+    assert.deepEqual(ops.find((o) => o.collection === 'debtors').increments, { lentCents: 5590 });
+    assert.deepEqual(ops.find((o) => o.collection === 'subscriptions'), advance); // avanço da data no MESMO lote
+    assert.equal(ops.some((o) => o.collection === 'expenses'), false);
+    assert.equal(updates.length, 0);
+  });
+
+  it('CARTÃO sem devedor: igual a antes — sem vínculo de devedor e sem escrita em devedores', async () => {
+    const { io, atomic } = mk(base({ cardId: 'c1', accountId: 'a1' }));
+    const r = await registerSubscriptionCharge(uid, 's1', io);
+    assert.deepEqual([r.ok, r.via], [true, 'card']);
+    const ops = atomic.at(-1);
+    assert.equal('debtorId' in ops.find((o) => o.collection === 'cardPurchases').data, false);
+    assert.equal(ops.some((o) => o.collection === 'debtors'), false);
+  });
+
+  it('SÓ DEVEDOR (sem cartão): cria UMA dívida à vista (valor, descrição, vencimento = data da cobrança), soma no emprestado e avança a data no MESMO lote', async () => {
+    const { io, atomic, updates } = mk(base({ debtorId: 'dv' }));
+    const r = await registerSubscriptionCharge(uid, 's1', io);
+    assert.deepEqual([r.ok, r.via, r.debtorId, r.nextChargeDate, r.generatedExpense], [true, 'debtor', 'dv', '2026-12-05', false]);
+    const ops = atomic.at(-1);
+    const debts = ops.filter((o) => o.collection === 'debts');
+    assert.equal(debts.length, 1);
+    assert.deepEqual(
+      [debts[0].data.debtorId, debts[0].data.principalCents, debts[0].data.description, debts[0].data.installmentsTotal, debts[0].data.status],
+      ['dv', 5590, 'Netflix', 1, 'pending'],
+    );
+    assert.equal(debts[0].data.dueDate, '2026-11-05');
+    assert.deepEqual(ops.find((o) => o.collection === 'debtors').increments, { lentCents: 5590 });
+    assert.deepEqual(ops.find((o) => o.collection === 'subscriptions'), advance); // avanço da data no MESMO lote
+    assert.equal(ops.some((o) => o.collection === 'expenses' || o.collection === 'incomes'), false); // nenhum lançamento em conta
+    assert.equal(updates.length, 0);
+  });
+
+  it('CONTA + DEVEDOR (sem cartão): também cria a dívida do devedor; a conta segue só como referência (nenhuma despesa)', async () => {
+    const { io, atomic } = mk(base({ accountId: 'a1', debtorId: 'dv' }));
+    const r = await registerSubscriptionCharge(uid, 's1', io);
+    assert.deepEqual([r.ok, r.via], [true, 'debtor']);
+    assert.equal(atomic.at(-1).filter((o) => o.collection === 'debts').length, 1);
+    assert.equal(atomic.at(-1).some((o) => o.collection === 'expenses'), false);
+  });
+
+  it('SEM VÍNCULO (só acompanhamento): só avança a data e audita; via "none"; nada financeiro', async () => {
+    const { io, atomic, updates, audits } = mk(base());
+    const r = await registerSubscriptionCharge(uid, 's1', io);
+    assert.deepEqual(r, { ok: true, nextChargeDate: '2026-12-05', via: 'none', generatedExpense: false });
+    assert.equal(atomic.length, 0);
+    assert.deepEqual(updates, [{ c: 'subscriptions', id: 's1', data: { nextChargeDate: '2026-12-05' } }]);
+    assert.equal(audits[0].action, 'charge');
+  });
+
+  it('SÓ CONTA (comportamento anterior): via "account", sem despesa, sem lote', async () => {
+    const { io, atomic } = mk(base({ accountId: 'a1' }));
+    const r = await registerSubscriptionCharge(uid, 's1', io);
+    assert.deepEqual([r.ok, r.via, r.generatedExpense], [true, 'account', false]);
+    assert.equal(atomic.length, 0);
+  });
+
+  it('devedor cancelado ou inexistente: nenhuma cobrança é gravada (nem a data avança) em cartão ou dívida à vista', async () => {
+    for (const subscription of [base({ debtorId: 'dv' }), base({ cardId: 'c1', debtorId: 'dv' })]) {
+      for (const debtor of [{ id: 'dv', name: 'R', status: 'cancelled', lentCents: 0, receivedCents: 0 }, null]) {
+        const { io, atomic, updates } = mk(subscription, debtor);
+        const r = await registerSubscriptionCharge(uid, 's1', io);
+        assert.equal(r.ok, false, JSON.stringify([subscription.cardId, debtor?.status]));
+        assert.equal(atomic.length + updates.length, 0);
+      }
+    }
   });
 });

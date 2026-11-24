@@ -545,7 +545,7 @@ describe('assinaturas × cartão × fatura (VF-2-03r)', () => {
     const good = await createSubscription(uid, { ...raw, cardId: 'c1' }, { lookupCategory: async () => ({ id: 'cat', kind: 'expense' }), lookupCard: async () => cardX, create: async () => 'x', writeAudit: async () => ({ ok: true }) });
     assert.equal(good.ok, true);
     const up = upcomingDue({ today: '2026-11-19', subscriptions: [
-      { id: 'a', name: 'Direta', status: 'active', nextChargeDate: '2026-11-20', amountCents: 1000 },
+      { id: 'a', name: 'Direta', status: 'active', nextChargeDate: '2026-11-20', amountCents: 1000, accountId: 'a1' },
       { id: 'b', name: 'No cartão', status: 'active', nextChargeDate: '2026-11-21', amountCents: 2000, cardId: 'c1' },
     ] });
     assert.deepEqual(up.map((i) => i.label), ['Direta']);

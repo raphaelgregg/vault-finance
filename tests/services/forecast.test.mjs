@@ -138,7 +138,7 @@ describe('previsão mensal', () => {
       pendingIncomes: [{ id: 'i1', status: 'pending', expectedDate: '2026-11-25', amountCents: 200000 }],
       expenses: [e('e1', '2026-11-20', 120000)],
       invoices: [{ id: 'f1', cardId: 'c1', status: 'closed', dueDate: '2026-11-28', totalCents: 150000 }],
-      subscriptions: [{ id: 's1', name: 'Streaming', status: 'active', periodicity: 'monthly', nextChargeDate: '2026-11-22', amountCents: 30000 }],
+      subscriptions: [{ id: 's1', name: 'Streaming', status: 'active', periodicity: 'monthly', nextChargeDate: '2026-11-22', amountCents: 30000, accountId: 'a1' }],
     });
     assert.equal(f.projectedBalanceCents, 400000);
   });
@@ -202,8 +202,8 @@ describe('previsão mensal', () => {
   });
 
   it('assinatura mensal e semanal: ocorrências no mês; paga direto × no cartão; cobranças futuras de outro mês', () => {
-    const monthly = { id: 'm', name: 'Streaming', status: 'active', periodicity: 'monthly', nextChargeDate: '2026-10-22', amountCents: 5000 };
-    const weekly = { id: 'w', name: 'Feira', status: 'active', periodicity: 'weekly', nextChargeDate: '2026-11-03', amountCents: 1000 };
+    const monthly = { id: 'm', name: 'Streaming', status: 'active', periodicity: 'monthly', nextChargeDate: '2026-10-22', amountCents: 5000, accountId: 'a1' };
+    const weekly = { id: 'w', name: 'Feira', status: 'active', periodicity: 'weekly', nextChargeDate: '2026-11-03', amountCents: 1000, accountId: 'a1' };
     assert.deepEqual(subscriptionOccurrences(monthly, '2026-11-01', '2026-11-30'), ['2026-11-22']); // projeta a partir de outubro
     assert.deepEqual(subscriptionOccurrences(weekly, '2026-11-01', '2026-11-30'), ['2026-11-03', '2026-11-10', '2026-11-17', '2026-11-24']);
     assert.deepEqual(subscriptionOccurrences({ ...monthly, nextChargeDate: '2026-12-05' }, '2026-11-01', '2026-11-30'), []);
@@ -215,7 +215,7 @@ describe('previsão mensal', () => {
   });
 
   it('PREVENÇÃO DE DUPLICIDADE: assinatura já lançada como despesa é descartada e sinalizada; no cartão nunca', () => {
-    const sub = { id: 's', name: 'Netflix', status: 'active', periodicity: 'monthly', nextChargeDate: '2026-11-20', amountCents: 5590 };
+    const sub = { id: 's', name: 'Netflix', status: 'active', periodicity: 'monthly', nextChargeDate: '2026-11-20', amountCents: 5590, accountId: 'a1' };
     const twin = e('d', '2026-11-20', 5590, 'pending', { description: ' netflix ' });
     const f = monthlyForecast({ ...base, expenses: [twin], subscriptions: [sub] });
     assert.equal(f.subscriptions.directCents, 0);
@@ -406,8 +406,19 @@ describe('assinatura no cartão: comprometimento (mês da cobrança) × saída d
     assert.equal(other.subscriptions.cardCommitmentCents, 5590);
   });
 
+  it('VF-COR-07: assinatura SEM conta e SEM cartão (só devedor ou só acompanhamento) NÃO sai do caixa da previsão; com devedor + cartão segue como cartão', () => {
+    const semVinculo = sub({ cardId: undefined, accountId: undefined });
+    const soDevedor = sub({ id: 's2', cardId: undefined, accountId: undefined, debtorId: 'dv' });
+    const f = monthlyForecast({ ...base, subscriptions: [semVinculo, soDevedor] });
+    assert.deepEqual([f.subscriptions.directCents, f.subscriptions.cardCommitmentCents], [0, 0]);
+    assert.equal(f.projectedBalanceCents, 100000);
+    const cartaoDevedor = monthlyForecast({ ...base, subscriptions: [sub({ debtorId: 'dv' })] });
+    const cartao = monthlyForecast({ ...base, subscriptions: [sub()] });
+    assert.deepEqual(cartaoDevedor.subscriptions, cartao.subscriptions);
+  });
+
   it('assinatura direta (conta) segue pela data da cobrança: comprometimento = caixa no mesmo mês', () => {
-    const f = monthlyForecast({ ...base, subscriptions: [sub({ cardId: undefined })] });
+    const f = monthlyForecast({ ...base, subscriptions: [sub({ cardId: undefined, accountId: 'a1' })] });
     assert.deepEqual([f.subscriptions.directCents, f.subscriptions.cardCommitmentCents, f.subscriptions.cardCashCents], [5590, 0, 0]);
     assert.equal(f.projectedBalanceCents, 100000 - 5590);
   });

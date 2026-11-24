@@ -93,9 +93,12 @@ export const SCHEMAS = Object.freeze({
       amountCents: money(),
       periodicity: { kind: 'enum', required: true, values: SUBSCRIPTION_PERIODICITIES.map((p) => p.value) },
       nextChargeDate: date(),
-      accountId: refField(),
+      // Conta OPCIONAL (VF-COR-07): assinatura pode estar só em cartão, só com devedor ou sem vínculo (apenas acompanhamento).
+      accountId: refField(false),
       // Cobrada no cartão (VF-2-03r): a cobrança vira parcela única na FATURA (não é débito direto na conta).
       cardId: refField(false),
+      // Devedor que paga a assinatura (VF-COR-07): cada cobrança vira valor a RECEBER dele (parcela no cartão ou dívida à vista).
+      debtorId: refField(false),
       // Assinaturas são cobradas como despesa: categoria de despesa ou "ambos".
       categoryId: refField(true, ['expense', 'both']),
       status: { kind: 'enum', required: true, values: SUBSCRIPTION_STATUSES.map((s) => s.value) },
@@ -236,7 +239,7 @@ export const REF_FIELDS = Object.freeze({
   incomes: ['categoryId', 'accountId'],
   expenses: ['categoryId', 'accountId'],
   transfers: ['fromAccountId', 'toAccountId'],
-  subscriptions: ['accountId', 'categoryId', 'cardId'],
+  subscriptions: ['accountId', 'categoryId', 'cardId', 'debtorId'],
   debtors: [],
   budgets: ['categoryId'],
   creditCards: ['accountId'],

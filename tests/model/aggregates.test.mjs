@@ -71,7 +71,7 @@ describe('dashboard', () => {
     const r = upcomingDue({
       today: '2026-11-19', limit: 3,
       expenses: [{ id: 'e1', status: 'pending', dueDate: '2026-11-25', description: 'Luz', amountCents: 100 }, { id: 'e2', status: 'pending', dueDate: '2026-11-01', description: 'Velha', amountCents: 1 }, { id: 'e3', status: 'paid', dueDate: '2026-11-20', description: 'Paga', amountCents: 1 }],
-      subscriptions: [{ id: 's1', status: 'active', nextChargeDate: '2026-11-19', name: 'Netflix', amountCents: 50 }, { id: 's2', status: 'paused', nextChargeDate: '2026-11-20', name: 'X', amountCents: 1 }],
+      subscriptions: [{ id: 's1', status: 'active', nextChargeDate: '2026-11-19', name: 'Netflix', amountCents: 50, accountId: 'a1' }, { id: 's2', status: 'paused', nextChargeDate: '2026-11-20', name: 'X', amountCents: 1 }],
       invoices: [{ id: 'i1', status: 'closed', dueDate: '2026-11-22', referenceMonth: '2026-11', totalCents: 900 }, { id: 'i2', status: 'open', dueDate: '2026-11-21', referenceMonth: '2026-11' }],
     });
     assert.deepEqual(r.map((x) => `${x.kind}:${x.id}`), ['subscription:s1', 'invoice:i1', 'expense:e1']);
@@ -97,5 +97,16 @@ describe('relatórios', () => {
   it('toCsv: separador ;, CRLF, aspas e proteção contra injeção de fórmula', () => {
     const csv = toCsv([{ a: 'x;y', b: '=1+1' }, { a: 'diz "oi"', b: 12 }, { a: '-cmd', b: null }], [{ key: 'a', label: 'A' }, { key: 'b', label: 'B' }]);
     assert.equal(csv, 'A;B\r\n"x;y";\'=1+1\r\n"diz ""oi""";12\r\n\'-cmd;');
+  });
+});
+
+describe('upcomingDue — assinaturas sem conta (VF-COR-07)', () => {
+  it('assinatura sem conta (só devedor/acompanhamento) não aparece em "próximos vencimentos": não vence na SUA conta', () => {
+    const up = upcomingDue({ today: '2026-11-19', subscriptions: [
+      { id: 'a', name: 'Com conta', status: 'active', nextChargeDate: '2026-11-20', amountCents: 1000, accountId: 'a1' },
+      { id: 'b', name: 'Só devedor', status: 'active', nextChargeDate: '2026-11-21', amountCents: 2000, debtorId: 'dv' },
+      { id: 'c', name: 'Sem vínculo', status: 'active', nextChargeDate: '2026-11-22', amountCents: 3000 },
+    ] });
+    assert.deepEqual(up.map((i) => i.label), ['Com conta']);
   });
 });
