@@ -345,3 +345,87 @@ describe('cancelamento de várias parcelas em 1 requisição (debt.cancelMany)',
     });
   });
 });
+
+describe('cancelar/reagendar devolve e ajusta o emprestado do devedor (VF-COR-10)', () => {
+  const iso = (t) => (t?.toDate ? t.toDate() : new Date(t)).toISOString().slice(0, 10);
+  const lent = async () => (await getDoc('debtors', 'dev')).lentCents;
+
+  it('debt.cancel devolve o valor da parcela ao emprestado (antes o total em aberto continuava cobrando o cancelado)', async () => {
+    await world({ n: 3, each: 1000 });
+    assert.equal(await lent(), 3000);
+    await callOk(UID, 'debt.cancel', opId(), { debtId: 'p0' });
+    assert.equal(await lent(), 2000);
+    assert.equal((await call(UID, 'debt.cancel', opId(), { debtId: 'p0' })).body.error, 'INVALID_STATE'); // já cancelada: não devolve de novo
+    assert.equal(await lent(), 2000);
+  });
+
+  it('debt.cancelMany devolve a soma ao emprestado numa só transação; recusa não devolve nada', async () => {
+    const [p0, p1, p2] = await world({ n: 3, each: 1000 });
+    await callOk(UID, 'debt.receive', opId(), recv(p2, 400));
+    assert.equal((await call(UID, 'debt.cancelMany', opId(), { debtIds: [p0, p1, p2] })).body.error, 'INVALID_STATE');
+    assert.equal(await lent(), 3000);
+    await callOk(UID, 'debt.cancelMany', opId(), { debtIds: [p0, p1] });
+    assert.equal(await lent(), 1000);
+  });
+
+  it('debt.reschedule move a data e ajusta o valor; o emprestado acompanha a diferença; idempotente', async () => {
+    await world({ n: 2, each: 1000 });
+    const key = opId('resc');
+    const r = await callOk(UID, 'debt.reschedule', key, { debtId: 'p0', dueDate: '2026-11-06', principalCents: 1500 });
+    assert.deepEqual([r.dueDate, r.principalCents, r.deltaCents, r.idempotent], ['2026-11-06', 1500, 500, false]);
+    const debt = await getDoc('debts', 'p0');
+    assert.deepEqual([iso(debt.dueDate), debt.principalCents, debt.status], ['2026-11-06', 1500, 'pending']);
+    assert.equal(await lent(), 2500);
+    assert.equal((await callOk(UID, 'debt.reschedule', key, { debtId: 'p0', dueDate: '2026-11-06', principalCents: 1500 })).idempotent, true);
+    assert.equal(await lent(), 2500); // repetição não soma de novo
+    await callOk(UID, 'debt.reschedule', opId(), { debtId: 'p0', principalCents: 800 }); // só valor, para menos
+    assert.equal(await lent(), 1800);
+    await callOk(UID, 'debt.reschedule', opId(), { debtId: 'p1', dueDate: '2027-01-15' }); // só data: emprestado intacto
+    assert.equal(await lent(), 1800);
+  });
+
+  it('parcela com recebimentos, paga ou cancelada NÃO é reagendada; nada é alterado', async () => {
+    const [p0, p1, p2] = await world({ n: 3, each: 1000 });
+    await callOk(UID, 'debt.receive', opId(), recv(p0, 400));
+    await callOk(UID, 'debt.receive', opId(), recv(p1, 1000)); // quitada
+    await callOk(UID, 'debt.cancel', opId(), { debtId: p2 });
+    for (const debtId of [p0, p1, p2]) {
+      const r = await call(UID, 'debt.reschedule', opId(), { debtId, dueDate: '2026-11-06', principalCents: 2000 });
+      assert.deepEqual([r.status, r.body.error], [409, 'INVALID_STATE'], debtId);
+    }
+    assert.equal(iso((await getDoc('debts', p0)).dueDate), '2026-12-10');
+    assert.equal(await lent(), 2000); // 3000 − 1000 da cancelada
+  });
+
+  it('validação e isolamento: sem campos, data/valor inválidos → 400; parcela de outro usuário nunca é alcançada', async () => {
+    await world({ n: 1, each: 1000 });
+    await world({ n: 1, each: 1000, uid: OTHER });
+    for (const params of [{ debtId: 'p0' }, { debtId: 'p0', dueDate: '2026-02-30' }, { debtId: 'p0', principalCents: 0 }, { debtId: 'p0', principalCents: 10.5 }, { debtId: '' }]) {
+      assert.equal((await call(UID, 'debt.reschedule', opId(), params)).status, 400, JSON.stringify(params));
+    }
+    const other = await call(UID, 'debt.reschedule', opId(), { debtId: 'p0', dueDate: '2026-11-06' });
+    assert.equal(other.status, 200); // p0 de UID é dele
+    const foreign = await call(OTHER, 'debt.reschedule', opId(), { debtId: 'p0', dueDate: '2026-11-07' });
+    assert.equal(foreign.status, 200);
+    assert.equal(iso((await getDoc('debts', 'p0')).dueDate), '2026-11-06'); // a de UID não foi tocada pela de OTHER
+  });
+
+  it('corrida reschedule × recebimento parcial na mesma parcela (10×): reagendar só vale ANTES do recebimento; o emprestado sempre bate com o valor da parcela', async () => {
+    await repeat(async () => {
+      const [p0] = await world({ n: 1, each: 10000 });
+      const [resc, rec] = await Promise.all([call(UID, 'debt.reschedule', opId(), { debtId: p0, dueDate: '2026-11-06', principalCents: 9000 }), call(UID, 'debt.receive', opId(), recv(p0, 4000))]);
+      const s = await state();
+      const debt = s.debts[0];
+      if (resc.status === 200) {
+        // reagendou primeiro (sem recebimentos): a parcela mudou por inteiro e o recebimento, se passou, foi sobre ela já alterada
+        assert.deepEqual([iso(debt.dueDate), debt.principalCents], ['2026-11-06', 9000]);
+      } else {
+        // o recebimento veio primeiro: a parcela NÃO pode ter sido alterada
+        assert.equal(resc.body.error, 'INVALID_STATE', JSON.stringify(resc));
+        assert.deepEqual([iso(debt.dueDate), debt.principalCents, rec.status], ['2026-12-10', 10000, 200]);
+      }
+      assert.equal(s.debtor.lentCents, debt.principalCents); // emprestado = única parcela, sempre
+      assert.equal(s.debtor.receivedCents, s.sum);
+    });
+  });
+});

@@ -163,20 +163,26 @@ function chargeTargetText(item) {
   return [where, who].filter(Boolean).join(' · ') || 'Sem vínculo (só acompanhamento)';
 }
 
-/**
- * Mensagem ao salvar. Vincular um devedor LANÇA a cobrança da próxima fatura (só ela: nada futuro nem retroativo) — o usuário
- * precisa ver o que aconteceu, inclusive quando a assinatura foi salva mas a cobrança não pôde ser lançada.
- */
+/** Frase sobre o que aconteceu com a dívida do devedor (caminho sem cartão) ou com a cobrança lançada (cartão + devedor). */
+function chargeNote(charge, fallbackDebtorId) {
+  if (!charge) return '';
+  if (!charge.ok) return ` A dívida do devedor NÃO foi ajustada: ${charge.errors?._form ?? Object.values(charge.errors ?? {})[0] ?? 'erro desconhecido'}`;
+  const who = debtorName(charge.debtorId ?? fallbackDebtorId);
+  const when = charge.date ? formatDate(charge.date) : '';
+  if (charge.via === 'card') return ` Cobrança lançada na fatura e vinculada a ${who} (a receber); próxima em ${formatDate(charge.nextChargeDate)}.`;
+  switch (charge.action) {
+    case 'launched': return ` Dívida de ${when} lançada para ${who} (a receber).`;
+    case 'rescheduled': return ` A dívida de ${who} foi reagendada para ${when}.`;
+    case 'cancelled': return ` A dívida pendente de ${when} de ${who} foi cancelada.`;
+    case 'kept': return ` A dívida de ${when} de ${who} tem recebimentos e foi mantida (estorne-os em Devedores para cancelá-la).`;
+    default: return '';
+  }
+}
+
+/** Mensagem ao salvar: informa o que aconteceu com a dívida do devedor, inclusive quando algo não pôde ser ajustado. */
 function saveMessage(isEdit, result, rawData) {
   const base = isEdit ? 'Assinatura atualizada com sucesso.' : 'Assinatura criada com sucesso.';
-  const charge = result.charge;
-  if (!charge) return base;
-  const when = formatDate(rawData.nextChargeDate);
-  if (!charge.ok) return `${base} A cobrança de ${when} NÃO foi lançada: ${charge.errors?._form ?? Object.values(charge.errors ?? {})[0] ?? 'erro desconhecido'}`;
-  const who = debtorName(charge.debtorId ?? rawData.debtorId);
-  return charge.via === 'card'
-    ? `${base} Cobrança de ${when} lançada na fatura e vinculada a ${who} (a receber); próxima em ${formatDate(charge.nextChargeDate)}.`
-    : `${base} Cobrança de ${when} lançada como dívida de ${who} (a receber); próxima em ${formatDate(charge.nextChargeDate)}.`;
+  return `${base}${chargeNote(result.charge, rawData.debtorId)}`;
 }
 
 async function chargeNow(item) {
@@ -185,7 +191,7 @@ async function chargeNow(item) {
     toast(r.via === 'card'
       ? `Cobrança lançada na fatura do cartão ${cardName(item.cardId)}${r.debtorId ? ` e vinculada ao devedor ${debtorName(r.debtorId)} (a receber)` : ''}; próxima em ${formatDate(r.nextChargeDate)}.`
       : r.via === 'debtor'
-        ? `Dívida criada para ${debtorName(r.debtorId)} (a receber); próxima cobrança em ${formatDate(r.nextChargeDate)}.`
+        ? `Cobrança registrada; ${r.launched ? `dívida da próxima fatura (${formatDate(r.nextChargeDate)}) lançada para ${debtorName(r.debtorId)} (a receber)` : `a dívida de ${formatDate(r.nextChargeDate)} de ${debtorName(r.debtorId)} já existia`}.`
         : `Cobrança registrada; próxima em ${formatDate(r.nextChargeDate)}. (Sem cartão nem devedor: não gera despesa nem altera o saldo — lance em Despesas se quiser refletir.)`, 6000);
     await reload();
   } else {
@@ -215,7 +221,7 @@ function createActions(item) {
 async function changeStatus(item, fn, successMessage) {
   const result = await fn(currentUser.uid, item.id);
   if (result.ok) {
-    toast(successMessage);
+    toast(`${successMessage}${chargeNote(result.charge, item.debtorId)}`, result.charge ? 7000 : undefined);
     await reload();
   } else {
     toast(result.errors?._form ?? 'Erro ao alterar o status.', 5000);
@@ -256,7 +262,7 @@ function confirmDelete(item) {
         closeModal();
         const result = await deleteSubscription(currentUser.uid, item.id);
         if (result.ok) {
-          toast('Assinatura excluída.');
+          toast(`Assinatura excluída.${chargeNote(result.charge, item.debtorId)}`, result.charge ? 7000 : undefined);
           await reload();
         } else {
           toast(`Erro: ${result.errors._form}`, 5000);
@@ -310,7 +316,7 @@ function openSubscriptionModal(item = null) {
       el('option', { value: '' }, 'Nenhum'),
       ...debtorsCache.filter((d) => (d.status !== 'cancelled' && !d.archived) || d.id === item?.debtorId).map((d) => el('option', { value: d.id, selected: item?.debtorId === d.id }, d.name)),
     ])),
-    el('p', { class: 'card__hint', text: 'Ao vincular um devedor, a cobrança da PRÓXIMA fatura é lançada como valor a receber dele (parcela na fatura do cartão ou dívida à vista, se não houver cartão) — só ela: as seguintes entram quando você registrar cada cobrança, pois a assinatura pode ser pausada ou cancelada. Quando ele pagar, o dinheiro entra na conta escolhida no recebimento; a fatura do cartão é paga à parte.' }),
+    el('p', { class: 'card__hint', text: 'Ao vincular um devedor, a cobrança da PRÓXIMA fatura vira valor a receber dele (dívida à vista, ou parcela na fatura se houver cartão) — só ela: as seguintes entram quando você registrar cada cobrança, pois a assinatura pode ser pausada ou cancelada. Sem cartão, a dívida acompanha a assinatura: editar a data ou o valor, pausar, cancelar ou desvincular ajusta ou cancela a dívida pendente (com recebimentos ela é mantida). Quando ele pagar, o dinheiro entra na conta escolhida no recebimento.' }),
     el('div', { class: 'form__row' }, [
       field('Conta (opcional)', 'accountId', el('select', { id: 'accountId', name: 'accountId' }, [
         el('option', { value: '' }, 'Sem conta'),

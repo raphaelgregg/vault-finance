@@ -605,7 +605,7 @@ try {
     const debts = await listDebts(uid, debtor.id);
     return { lentCents: debtor.lentCents, debts: debts.map((d) => [d.description, d.principalCents, d.status, d.installmentsTotal]) };
   });
-  // 1) CRIAR já com devedor: o vínculo lança a cobrança da PRÓXIMA fatura (uma só) como dívida a receber
+  // 1) CRIAR já com devedor: o vínculo lança a dívida da PRÓXIMA fatura (a da data da assinatura — uma só, sem avançar a data)
   await page.getByRole('button', { name: /Nova assinatura/ }).click();
   assert.equal(await page.locator('#accountId').getAttribute('required'), null, 'conta não é mais obrigatória');
   await page.fill('#name', 'Disney');
@@ -613,7 +613,7 @@ try {
   await page.selectOption('#categoryId', { index: 1 });
   await page.selectOption('#debtorId', { label: 'Roberta' });
   await page.locator('#subscription-form button[type="submit"]').click();
-  await page.waitForFunction(() => /Cobrança de .* lançada como dívida de Roberta \(a receber\)/.test(document.querySelector('.toast')?.innerText ?? ''));
+  await page.waitForFunction(() => /Dívida de .* lançada para Roberta \(a receber\)/.test(document.querySelector('.toast')?.innerText ?? ''));
   await page.waitForFunction(() => /Disney/.test(document.querySelector('#page-content tbody')?.innerText ?? ''));
   assert.match(await page.locator('#page-content tbody tr', { hasText: 'Disney' }).innerText(), /Devedor Roberta/);
   assert.deepEqual(await robertaState(), { lentCents: 3390, debts: [['Disney', 3390, 'pending', 1]] }); // UMA dívida, sem futuras
@@ -629,7 +629,7 @@ try {
   await page.selectOption('#debtorId', { label: 'Roberta' });
   await page.locator('#subscription-form button[type="submit"]').click();
   await page.waitForFunction(() => /Hulu/.test(document.querySelector('#page-content tbody')?.innerText ?? '') && /Roberta/.test(document.querySelector('#page-content tbody')?.innerText ?? ''));
-  await page.waitForFunction(() => /Assinatura atualizada com sucesso\. Cobrança de .* lançada como dívida de Roberta/.test(document.querySelector('.toast')?.innerText ?? ''));
+  await page.waitForFunction(() => /Assinatura atualizada com sucesso\. Dívida de .* lançada para Roberta/.test(document.querySelector('.toast')?.innerText ?? ''));
   assert.deepEqual((await robertaState()).debts.map((d) => d[0]).sort(), ['Disney', 'Hulu']);
   await page.evaluate(() => document.querySelector('.toast')?.remove());
   await page.getByRole('button', { name: /^Editar Hulu/ }).click();
@@ -661,6 +661,70 @@ try {
   assert.match(await page.locator('#page-content tbody tr', { hasText: 'Cloud pessoal' }).innerText(), /Sem vínculo \(só acompanhamento\)/);
   await page.getByRole('button', { name: 'Registrar cobrança de Cloud pessoal' }).click();
   await page.waitForFunction(() => /Sem cartão nem devedor: não gera despesa/.test(document.querySelector('.toast')?.innerText ?? ''));
+
+  log('VF-COR-10: a dívida do devedor ACOMPANHA a assinatura (criar em 06/12, editar para 06/11, valor, pausar, retomar, cancelar)');
+  await page.evaluate(async () => {
+    const { createDebtor } = await import('/js/services/debtors.js');
+    const { auth } = await import('/js/firebase/client.js');
+    await createDebtor(auth.currentUser.uid, { name: 'Marta', lentCents: '0,00', loanDate: '2026-11-01' });
+  });
+  const marta = () => page.evaluate(async () => {
+    const { listDebtors } = await import('/js/services/debtors.js');
+    const { listDebts } = await import('/js/services/debtPayments.js');
+    const { auth } = await import('/js/firebase/client.js');
+    const uid = auth.currentUser.uid;
+    const debtor = (await listDebtors(uid)).find((d) => d.name === 'Marta');
+    const debts = (await listDebts(uid, debtor.id)).map((d) => [String(d.dueDate), d.principalCents, d.status]).sort();
+    return { lentCents: debtor.lentCents, debts };
+  });
+  const fresh = () => page.evaluate(() => document.querySelector('.toast')?.remove());
+  const toastWait = (re) => page.waitForFunction((src) => new RegExp(src).test(document.querySelector('.toast')?.innerText ?? ''), re.source);
+  const submit = () => page.locator('#subscription-form button[type="submit"]').click();
+  const rowText = (name) => page.locator('#page-content tbody tr', { hasText: name }).innerText();
+  await page.getByRole('button', { name: /Nova assinatura/ }).click();
+  await page.fill('#name', 'Prime');
+  await page.fill('#amountCents', '20,00');
+  await page.fill('#nextChargeDate', '2026-12-06');
+  await page.selectOption('#categoryId', { index: 1 });
+  await page.selectOption('#debtorId', { label: 'Marta' });
+  await fresh(); await submit();
+  await toastWait(/Dívida de 06\/12\/2026 lançada para Marta/);
+  assert.deepEqual(await marta(), { lentCents: 2000, debts: [['2026-12-06', 2000, 'pending']] });
+  assert.match(await rowText('Prime'), /06\/12\/2026/); // a data da assinatura NÃO avançou: é a data da dívida lançada
+  // EDITAR a data para 06/11: a MESMA dívida é reagendada (não surge outra e o emprestado não dobra)
+  await page.getByRole('button', { name: /^Editar Prime/ }).click();
+  await page.fill('#nextChargeDate', '2026-11-06');
+  await fresh(); await submit();
+  await toastWait(/reagendada para 06\/11\/2026/);
+  assert.deepEqual(await marta(), { lentCents: 2000, debts: [['2026-11-06', 2000, 'pending']] });
+  assert.match(await rowText('Prime'), /06\/11\/2026/);
+  // EDITAR o valor: a dívida e o emprestado acompanham a diferença
+  await page.getByRole('button', { name: /^Editar Prime/ }).click();
+  await page.fill('#amountCents', '30,00');
+  await fresh(); await submit();
+  await toastWait(/reagendada para 06\/11\/2026/);
+  assert.deepEqual(await marta(), { lentCents: 3000, debts: [['2026-11-06', 3000, 'pending']] });
+  // PAUSAR cancela a dívida pendente (o emprestado volta); RETOMAR lança de novo
+  await fresh();
+  await page.getByRole('button', { name: 'Pausar Prime' }).click();
+  await toastWait(/Assinatura pausada\. A dívida pendente de 06\/11\/2026 de Marta foi cancelada/);
+  assert.deepEqual(await marta(), { lentCents: 0, debts: [['2026-11-06', 3000, 'cancelled']] });
+  await fresh();
+  await page.getByRole('button', { name: 'Retomar Prime' }).click();
+  await toastWait(/Assinatura retomada\. Dívida de 06\/11\/2026 lançada para Marta/);
+  assert.deepEqual(await marta(), { lentCents: 3000, debts: [['2026-11-06', 3000, 'cancelled'], ['2026-11-06', 3000, 'pending']] });
+  // REGISTRAR COBRANÇA fecha o ciclo: mantém a desta data e lança a da próxima fatura (a data da assinatura avança junto)
+  await fresh();
+  await page.getByRole('button', { name: 'Registrar cobrança de Prime' }).click();
+  await toastWait(/Cobrança registrada; dívida da próxima fatura \(06\/12\/2026\) lançada para Marta/);
+  assert.deepEqual(await marta(), { lentCents: 6000, debts: [['2026-11-06', 3000, 'cancelled'], ['2026-11-06', 3000, 'pending'], ['2026-12-06', 3000, 'pending']] });
+  assert.match(await rowText('Prime'), /06\/12\/2026/);
+  // CANCELAR a assinatura tira só a dívida da PRÓXIMA fatura; a do ciclo já registrado segue devida
+  await fresh();
+  await page.getByRole('button', { name: 'Cancelar Prime' }).click();
+  await page.getByRole('button', { name: 'Cancelar assinatura', exact: true }).click().catch(() => {});
+  await toastWait(/Assinatura cancelada\. A dívida pendente de 06\/12\/2026 de Marta foi cancelada/);
+  assert.deepEqual(await marta(), { lentCents: 3000, debts: [['2026-11-06', 3000, 'cancelled'], ['2026-11-06', 3000, 'pending'], ['2026-12-06', 3000, 'cancelled']] });
 
   log('VF-COR-09: assinatura mensal do dia 31 mantém o dia ao longo dos ciclos (28/02 → 31/03 → 30/04)');
   await page.getByRole('button', { name: /Nova assinatura/ }).click();

@@ -31,7 +31,7 @@ describe('handleFinance — recusas antes do banco', () => {
 
   it('toda operação de dinheiro está registrada no servidor', () => {
     for (const op of ['transfer.create', 'transfer.confirm', 'income.create', 'income.receive', 'expense.create', 'expense.pay', 'invoice.pay', 'goal.deposit', 'goal.withdraw',
-      'debt.receive', 'debt.settleBatch', 'debt.cancel', 'debt.cancelMany', 'reversal.create', 'account.adjustOpening', 'account.archive', 'account.unarchive', 'account.delete', 'debtor.archive', 'debtor.unarchive', 'debtor.delete', 'data.clearOwn']) {
+      'debt.receive', 'debt.settleBatch', 'debt.cancel', 'debt.cancelMany', 'debt.reschedule', 'reversal.create', 'account.adjustOpening', 'account.archive', 'account.unarchive', 'account.delete', 'debtor.archive', 'debtor.unarchive', 'debtor.delete', 'data.clearOwn']) {
       assert.ok(registry.has?.(op) ?? registry[op], op);
     }
   });

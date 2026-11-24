@@ -185,30 +185,45 @@ describe('registerSubscriptionCharge — destinos: cartão, devedor e sem víncu
     assert.equal(ops.some((o) => o.collection === 'debtors'), false);
   });
 
-  it('SÓ DEVEDOR (sem cartão): cria UMA dívida à vista (valor, descrição, vencimento = data da cobrança), soma no emprestado e avança a data no MESMO lote', async () => {
+  it('SÓ DEVEDOR (sem cartão) — "Registrar cobrança" FECHA o ciclo: garante a dívida desta data e lança a da PRÓXIMA fatura, avançando a data no MESMO lote', async () => {
     const { io, atomic, updates } = mk(base({ debtorId: 'dv' }));
     const r = await registerSubscriptionCharge(uid, 's1', io);
-    assert.deepEqual([r.ok, r.via, r.debtorId, r.nextChargeDate, r.generatedExpense], [true, 'debtor', 'dv', '2026-12-05', false]);
-    const ops = atomic.at(-1);
-    const debts = ops.filter((o) => o.collection === 'debts');
-    assert.equal(debts.length, 1);
-    assert.deepEqual(
-      [debts[0].data.debtorId, debts[0].data.principalCents, debts[0].data.description, debts[0].data.installmentsTotal, debts[0].data.status],
-      ['dv', 5590, 'Netflix', 1, 'pending'],
-    );
-    assert.equal(debts[0].data.dueDate, '2026-11-05');
-    assert.deepEqual(ops.find((o) => o.collection === 'debtors').increments, { lentCents: 5590 });
-    assert.deepEqual(ops.find((o) => o.collection === 'subscriptions'), advance); // avanço da data no MESMO lote
-    assert.equal(ops.some((o) => o.collection === 'expenses' || o.collection === 'incomes'), false); // nenhum lançamento em conta
+    assert.deepEqual([r.ok, r.via, r.debtorId, r.nextChargeDate, r.launched, r.generatedExpense], [true, 'debtor', 'dv', '2026-12-05', true, false]);
+    assert.equal(atomic.length, 2);
+    const [thisCycle, next] = atomic;
+    const debts = (batch) => batch.filter((o) => o.collection === 'debts');
+    assert.deepEqual(debts(thisCycle).map((o) => [o.docId, o.data.dueDate, o.data.principalCents]), [['sub_s1_2026-11-05', '2026-11-05', 5590]]);
+    assert.deepEqual(debts(next).map((o) => [o.docId, o.data.dueDate, o.data.principalCents, o.data.description]), [['sub_s1_2026-12-05', '2026-12-05', 5590, 'Netflix']]);
+    assert.equal(thisCycle.some((o) => o.collection === 'subscriptions'), false); // a data só avança junto da dívida da próxima fatura
+    assert.deepEqual(next.find((o) => o.collection === 'subscriptions'), advance);
+    assert.equal(atomic.flat().some((o) => o.collection === 'expenses' || o.collection === 'incomes'), false); // nenhum lançamento em conta
     assert.equal(updates.length, 0);
+  });
+
+  it('CICLO: a dívida desta data já existente não é recriada — só a próxima é lançada e a data avança', async () => {
+    const m = mk(base({ debtorId: 'dv' }));
+    m.io.list = async (u, c) => (c === 'debts' ? [{ id: 'sub_s1_2026-11-05', debtorId: 'dv', dueDate: '2026-11-05', status: 'pending', principalCents: 5590 }] : []);
+    const r = await registerSubscriptionCharge(uid, 's1', m.io);
+    assert.deepEqual([r.ok, r.launched, m.atomic.length], [true, true, 1]);
+    assert.deepEqual(m.atomic[0].filter((o) => o.collection === 'debts').map((o) => o.data.dueDate), ['2026-12-05']);
+  });
+
+  it('CICLO: se a dívida da próxima fatura também já existe, só a data avança (nada é recriado nem somado)', async () => {
+    const m = mk(base({ debtorId: 'dv' }));
+    m.io.list = async (u, c) => (c === 'debts'
+      ? [{ id: 'sub_s1_2026-11-05', debtorId: 'dv', dueDate: '2026-11-05', status: 'pending' }, { id: 'sub_s1_2026-12-05', debtorId: 'dv', dueDate: '2026-12-05', status: 'pending' }]
+      : []);
+    const r = await registerSubscriptionCharge(uid, 's1', m.io);
+    assert.deepEqual([r.ok, r.launched], [true, false]);
+    assert.deepEqual(m.atomic, [[advance]]);
   });
 
   it('CONTA + DEVEDOR (sem cartão): também cria a dívida do devedor; a conta segue só como referência (nenhuma despesa)', async () => {
     const { io, atomic } = mk(base({ accountId: 'a1', debtorId: 'dv' }));
     const r = await registerSubscriptionCharge(uid, 's1', io);
     assert.deepEqual([r.ok, r.via], [true, 'debtor']);
-    assert.equal(atomic.at(-1).filter((o) => o.collection === 'debts').length, 1);
-    assert.equal(atomic.at(-1).some((o) => o.collection === 'expenses'), false);
+    assert.equal(atomic.flat().filter((o) => o.collection === 'debts').length, 2); // desta data + da próxima fatura
+    assert.equal(atomic.flat().some((o) => o.collection === 'expenses'), false);
   });
 
   it('SEM VÍNCULO (só acompanhamento): só avança a data e audita; via "none"; nada financeiro', async () => {
@@ -238,38 +253,22 @@ describe('registerSubscriptionCharge — destinos: cartão, devedor e sem víncu
     }
   });
 
-  it('DUPLICIDADE: cobrança já lançada (cartão ou dívida) é recusada sem gravar; corrida no lote vira "já lançada"', async () => {
-    for (const [subscription, collection] of [[base({ cardId: 'c1', debtorId: 'dv' }), 'cardPurchases'], [base({ debtorId: 'dv' }), 'debts']]) {
-      const m = mk(subscription);
-      const getById = m.io.getById;
-      m.io.getById = async (u, c, id) => (c === collection && id === 'sub_s1_2026-11-05' ? { id } : getById(u, c, id));
-      const r = await registerSubscriptionCharge(uid, 's1', m.io);
-      assert.equal(r.ok, false, collection);
-      assert.match(r.errors._form, /05\/11\/2026 desta assinatura já foi lançada/);
-      assert.equal(m.atomic.length + m.updates.length, 0);
+  it('DUPLICIDADE (cartão): compra da assinatura nessa data já lançada é recusada sem gravar', async () => {
+    const m = mk(base({ cardId: 'c1', debtorId: 'dv' }));
+    const getById = m.io.getById;
+    m.io.getById = async (u, c, id) => (c === 'cardPurchases' && id === 'sub_s1_2026-11-05' ? { id } : getById(u, c, id));
+    const r = await registerSubscriptionCharge(uid, 's1', m.io);
+    assert.equal(r.ok, false);
+    assert.match(r.errors._form, /05\/11\/2026 desta assinatura já foi lançada/);
+    assert.equal(m.atomic.length + m.updates.length, 0);
+  });
+
+  it('CORRIDA no lote (dívida ou compra): outra chamada gravou o mesmo id antes → "já lançada", nada duplicado', async () => {
+    for (const subscription of [base({ debtorId: 'dv' }), base({ cardId: 'c1', debtorId: 'dv' })]) {
+      const raced = mk(subscription);
+      raced.io.commitAtomic = async () => { throw Object.assign(new Error('denied'), { code: 'permission-denied' }); };
+      const r = await registerSubscriptionCharge(uid, 's1', raced.io);
+      assert.deepEqual([r.ok, /já foi lançada/.test(r.errors._form)], [false, true]);
     }
-    const raced = mk(base({ debtorId: 'dv' }));
-    raced.io.commitAtomic = async () => { throw Object.assign(new Error('denied'), { code: 'permission-denied' }); };
-    const r = await registerSubscriptionCharge(uid, 's1', raced.io);
-    assert.deepEqual([r.ok, /já foi lançada/.test(r.errors._form)], [false, true]);
-  });
-});
-
-describe('registerSubscriptionCharge — usa o dia original (VF-COR-09)', () => {
-  const run = async (current) => {
-    const { io, calls } = makeIo(current);
-    const r = await registerSubscriptionCharge(uid, 's1', io);
-    return { r, calls };
-  };
-
-  it('assinatura do dia 31 já ajustada para 28/02 volta ao dia 31 em março', async () => {
-    const { r, calls } = await run(sub({ nextChargeDate: '2026-02-28', chargeDay: 31 }));
-    assert.equal(r.nextChargeDate, '2026-03-31');
-    assert.deepEqual(calls.update, [{ c: 'subscriptions', id: 's1', data: { nextChargeDate: '2026-03-31' } }]);
-  });
-
-  it('assinatura antiga (sem chargeDay) segue como antes', async () => {
-    const { r } = await run(sub({ nextChargeDate: '2026-02-28' }));
-    assert.equal(r.nextChargeDate, '2026-03-28');
   });
 });

@@ -123,6 +123,8 @@ export function makeStore(seed = {}) {
         if (!['pending', 'late'].includes(debt.status)) throw new FinanceError(409, 'INVALID_STATE', 'Só é possível cancelar parcelas pendentes ou atrasadas.');
         if (tables.debtPayments.some((p) => p.debtId === params.debtId)) throw new FinanceError(409, 'INVALID_STATE', 'A parcela já possui recebimentos e não pode ser cancelada.');
         Object.assign(tables.debts.find((d) => d.id === params.debtId), { status: 'cancelled' });
+        const owner = tables.debtors.find((d) => d.id === debt.debtorId);
+        if (owner) owner.lentCents -= Number(debt.principalCents) || 0; // cancelar devolve o valor ao emprestado (como o servidor)
         return { ok: true, debtId: params.debtId, status: 'cancelled' };
       }
       if (op === 'debt.settleBatch') {

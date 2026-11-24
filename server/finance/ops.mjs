@@ -285,6 +285,21 @@ defineOp('debt.receive', {
   prepare: (ctx, p, operationId) => prepareReceive(ctx, p, operationId),
 });
 
+/**
+ * Devedor da parcela, validado para REMOVER `removedCents` do emprestado: cancelar/reagendar para menos precisa devolver o valor
+ * ao `lentCents` (senão o total em aberto continua cobrando o que foi cancelado). O emprestado nunca pode ficar abaixo do já recebido.
+ */
+async function debtorForLentChange(ctx, debtorId, deltaCents) {
+  const debtor = await ctx.get('debtors', debtorId);
+  if (!debtor) throw new FinanceError(404, 'NOT_FOUND', 'Devedor da parcela não encontrado.');
+  if ((Number(debtor.lentCents) || 0) + deltaCents < (Number(debtor.receivedCents) || 0)) {
+    throw invalidState('O valor emprestado do devedor ficaria abaixo do já recebido; estorne recebimentos antes.', { debtorId });
+  }
+  return debtor;
+}
+
+const lentIncrement = (c, debtorId, deltaCents) => c.tx.update(c.ref('debtors', debtorId), { lentCents: FieldValue.increment(deltaCents), ...stamps() });
+
 defineOp('debt.cancel', {
   validate: (p) => ({ debtId: v.id(p.debtId, 'debtId') }),
   async prepare(ctx, p) {
@@ -293,7 +308,12 @@ defineOp('debt.cancel', {
     if (!['pending', 'late'].includes(debt.status)) throw invalidState('Só é possível cancelar parcelas pendentes ou atrasadas.', { status: debt.status });
     const { count } = await installmentReceived(ctx, 'debt', debt.id);
     if (count > 0) throw invalidState('A parcela já possui recebimentos e não pode ser cancelada (estorne-os antes).');
-    return { result: { debtId: debt.id, status: 'cancelled' }, apply: (c) => c.tx.update(c.ref('debts', debt.id), { status: 'cancelled', ...stamps() }) };
+    const principal = Number(debt.principalCents) || 0;
+    await debtorForLentChange(ctx, debt.debtorId, -principal);
+    return {
+      result: { debtId: debt.id, status: 'cancelled' },
+      apply: (c) => { c.tx.update(c.ref('debts', debt.id), { status: 'cancelled', ...stamps() }); lentIncrement(c, debt.debtorId, -principal); },
+    };
   },
 });
 
@@ -321,9 +341,49 @@ defineOp('debt.cancelMany', {
       if (count > 0) throw invalidState('Há parcela selecionada com recebimentos: ela não pode ser cancelada (estorne-os antes). Nada foi cancelado.', { debtId: id });
       debts.push(debt);
     }
+    // Devolve ao emprestado, POR devedor, a soma das parcelas canceladas (uma escrita por devedor, no mesmo lote).
+    const byDebtor = new Map();
+    for (const debt of debts) byDebtor.set(debt.debtorId, (byDebtor.get(debt.debtorId) ?? 0) + (Number(debt.principalCents) || 0));
+    for (const [debtorId, cents] of byDebtor) await debtorForLentChange(ctx, debtorId, -cents);
     return {
       result: { debtIds: p.debtIds, count: debts.length, status: 'cancelled' },
-      apply: (c) => { for (const debt of debts) c.tx.update(c.ref('debts', debt.id), { status: 'cancelled', ...stamps() }); },
+      apply: (c) => {
+        for (const debt of debts) c.tx.update(c.ref('debts', debt.id), { status: 'cancelled', ...stamps() });
+        for (const [debtorId, cents] of byDebtor) lentIncrement(c, debtorId, -cents);
+      },
+    };
+  },
+});
+
+/**
+ * Reagenda e/ou reajusta o valor de UMA parcela pendente/atrasada SEM recebimentos, na mesma transação do emprestado do devedor
+ * (`lentCents += novo − antigo`). Usado quando a assinatura vinculada a um devedor muda de data/valor: a dívida já lançada acompanha.
+ * Parcela com recebimentos não é alterada (estorne antes). Idempotente por `operationId`.
+ */
+defineOp('debt.reschedule', {
+  validate: (p) => {
+    if (p.dueDate === undefined && p.principalCents === undefined) throw new FinanceError(400, 'INVALID_PARAM', 'Informe dueDate e/ou principalCents.');
+    return {
+      debtId: v.id(p.debtId, 'debtId'),
+      ...(p.dueDate !== undefined ? { dueDate: v.date(p.dueDate, 'dueDate') } : {}),
+      ...(p.principalCents !== undefined ? { principalCents: v.cents(p.principalCents, 'principalCents') } : {}),
+    };
+  },
+  async prepare(ctx, p) {
+    const debt = await ctx.get('debts', p.debtId);
+    if (!debt) throw new FinanceError(404, 'NOT_FOUND', 'Parcela não encontrada.');
+    if (!['pending', 'late'].includes(debt.status)) throw invalidState('Só é possível reagendar parcelas pendentes ou atrasadas.', { status: debt.status });
+    const { count } = await installmentReceived(ctx, 'debt', debt.id);
+    if (count > 0) throw invalidState('A parcela já possui recebimentos e não pode ser alterada (estorne-os antes).');
+    const principal = p.principalCents ?? (Number(debt.principalCents) || 0);
+    const delta = principal - (Number(debt.principalCents) || 0);
+    await debtorForLentChange(ctx, debt.debtorId, delta);
+    return {
+      result: { debtId: debt.id, ...(p.dueDate ? { dueDate: p.dueDate } : {}), principalCents: principal, deltaCents: delta },
+      apply: (c) => {
+        c.tx.update(c.ref('debts', debt.id), { ...(p.dueDate ? { dueDate: toTs(p.dueDate) } : {}), principalCents: principal, ...stamps() });
+        if (delta !== 0) lentIncrement(c, debt.debtorId, delta);
+      },
     };
   },
 });
