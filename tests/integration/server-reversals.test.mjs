@@ -87,6 +87,46 @@ describe('estorno de despesa, receita, transferência, fatura', () => {
     assert.equal((await call(UID, 'reversal.create', opId(), rev('transfer', t.transferId))).body.error, 'ALREADY_REVERSED');
   });
 
+  it('transferência ESTORNADA não pode ser reaberta e confirmada de novo (INVALID_STATE) — evita ficar confirmada com estorno registrado', async () => {
+    await world();
+    const t = await callOk(UID, 'transfer.create', opId(), { fromAccountId: 'A', toAccountId: 'B', amountCents: 6000, date: '2026-12-05', reason: 'x', status: 'confirmed' });
+    await callOk(UID, 'reversal.create', opId(), rev('transfer', t.transferId));
+    await adminDb().doc(`users/${UID}/transfers/${t.transferId}`).update({ status: 'pending' }); // o que a tela antiga fazia ao "editar e confirmar"
+    const refused = await call(UID, 'transfer.confirm', opId(), { transferId: t.transferId });
+    assert.deepEqual([refused.status, refused.body.error], [409, 'INVALID_STATE']);
+    assert.match(refused.body.message, /estornada/i);
+    assert.equal(await oracleBalance('A'), 10000);
+    assert.equal(await oracleBalance('B'), 0);
+  });
+
+  it('transferência PRESA (confirmada com estorno já registrado) pode ser estornada de novo: estorno com sufixo, saldos corretos', async () => {
+    await world();
+    const t = await callOk(UID, 'transfer.create', opId(), { fromAccountId: 'A', toAccountId: 'B', amountCents: 6000, date: '2026-12-05', reason: 'x', status: 'confirmed' });
+    await callOk(UID, 'reversal.create', opId(), rev('transfer', t.transferId));
+    await adminDb().doc(`users/${UID}/transfers/${t.transferId}`).update({ status: 'confirmed' }); // estado preso real (dado antigo)
+    assert.equal(await oracleBalance('A'), 4000);
+    const again = await callOk(UID, 'reversal.create', opId(), rev('transfer', t.transferId, { reason: 'Desfazer reabertura' }));
+    assert.equal(again.reversalId, `transfers_${t.transferId}_2`);
+    assert.equal((await getDoc('transfers', t.transferId)).status, 'cancelled');
+    assert.equal(await oracleBalance('A'), 10000);
+    assert.equal(await oracleBalance('B'), 0);
+    assert.equal((await dump('reversals')).length, 2);
+    // e agora sim é duplicata
+    assert.equal((await call(UID, 'reversal.create', opId(), rev('transfer', t.transferId))).body.error, 'ALREADY_REVERSED');
+  });
+
+  it('receita estornada e recebida de novo pode ser estornada outra vez (novo estorno com sufixo)', async () => {
+    await world();
+    await seed(UID, 'incomes', 'i1', { description: 'Salário', categoryId: 'catI', amountCents: 4000, accountId: 'A', expectedDate: '2026-12-01', receivedDate: '2026-12-02', status: 'received', recurrence: 'none' });
+    await callOk(UID, 'reversal.create', opId(), rev('income', 'i1'));
+    assert.equal(await oracleBalance('A'), 10000);
+    await callOk(UID, 'income.receive', opId(), { id: 'i1', date: '2026-12-03' });
+    assert.equal(await oracleBalance('A'), 14000);
+    const again = await callOk(UID, 'reversal.create', opId(), rev('income', 'i1', { reason: 'De novo' }));
+    assert.equal(again.reversalId, 'incomes_i1_2');
+    assert.equal(await oracleBalance('A'), 10000);
+  });
+
   it('fatura paga: o estorno reabre a fatura (fechada) e devolve o saldo à conta que pagou', async () => {
     await world();
     await seed(UID, 'invoices', 'inv', { cardId: 'card', referenceMonth: '2026-12', closingDate: '2026-12-01', dueDate: '2026-12-10', status: 'closed', totalCents: 4000 });

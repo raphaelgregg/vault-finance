@@ -67,6 +67,10 @@ export async function updateTransfer(uid, transferId, rawData, io = {}) {
   const current = await (io.getById ?? getById)(uid, COLLECTION, transferId);
   if (!current) return { ok: false, errors: { _form: 'Transferência não encontrada.' } };
   if (current.status === 'confirmed') return { ok: false, errors: { _form: CONFIRMED_IMMUTABLE } };
+  // Cancelada é terminal (TRANSFER_TRANSITIONS): reabrir uma transferência estornada a deixava confirmada com estorno registrado (presa).
+  if (current.status === 'cancelled' && data.status !== 'cancelled') {
+    return { ok: false, errors: { status: 'Transferência cancelada ou estornada não pode ser reaberta; lance uma nova transferência.' } };
+  }
   const wantsConfirm = data.status === 'confirmed';
   await updateAudited(uid, COLLECTION, transferId, wantsConfirm ? { ...data, status: 'pending' } : data, io);
   if (wantsConfirm) return confirmTransfer(uid, transferId, io);
