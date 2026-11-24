@@ -55,7 +55,7 @@ describe('subscriptions — schema (espelha firestore.rules)', () => {
   it('chaves e enums iguais às Rules', () => {
     assert.deepEqual(
       Object.keys(SCHEMAS.subscriptions.fields).sort(),
-      ['accountId', 'amountCents', 'cardId', 'categoryId', 'name', 'nextChargeDate', 'notes', 'periodicity', 'status']
+      ['accountId', 'amountCents', 'cardId', 'categoryId', 'debtorId', 'name', 'nextChargeDate', 'notes', 'periodicity', 'status']
     );
     assert.deepEqual(getPeriodicityOptions().map((o) => o.value), ['monthly', 'weekly', 'yearly']);
     assert.deepEqual(getSubscriptionStatusOptions().map((o) => o.value), ['active', 'paused', 'cancelled']);
@@ -228,5 +228,45 @@ describe('subscriptions — transições de status', () => {
     const broken = makeIo({ getById: async () => { throw new Error('offline'); } });
     await assert.rejects(() => pauseSubscription(uid, 'x1', broken.io), /offline/);
     assert.equal(broken.calls.update.length, 0);
+  });
+});
+
+describe('subscriptions — vínculos opcionais: conta, cartão e devedor (VF-COR-07)', () => {
+  const raw = { name: 'Netflix', amountCents: '55,90', periodicity: 'monthly', nextChargeDate: '2026-12-05', categoryId: 'cat', status: 'active' };
+  const deps = (over = {}) => ({ lookupCategory: async () => ({ id: 'cat', kind: 'expense' }), lookupDebtor: async () => ({ id: 'dv', status: 'open' }), create: async (u, c, data) => { deps.created = data; return 'new1'; }, writeAudit: async () => ({ ok: true }), ...over });
+
+  it('a conta NÃO é obrigatória: schema aceita assinatura sem conta, sem cartão e sem devedor (só acompanhamento)', async () => {
+    assert.equal(SCHEMAS.subscriptions.fields.accountId.required, false);
+    assert.equal(SCHEMAS.subscriptions.fields.debtorId.required, false);
+    const r = await createSubscription('u1', raw, deps());
+    assert.deepEqual([r.ok, r.id], [true, 'new1']);
+    assert.equal('accountId' in deps.created, false);
+    assert.equal('debtorId' in deps.created, false);
+  });
+
+  it('com devedor: precisa existir e não estar cancelado; quitado/aberto são aceitos', async () => {
+    const ok = await createSubscription('u1', { ...raw, debtorId: 'dv' }, deps());
+    assert.equal(ok.ok, true);
+    assert.equal(deps.created.debtorId, 'dv');
+    assert.equal((await createSubscription('u1', { ...raw, debtorId: 'dv' }, deps({ lookupDebtor: async () => ({ id: 'dv', status: 'paid' }) }))).ok, true);
+    const missing = await createSubscription('u1', { ...raw, debtorId: 'dv' }, deps({ lookupDebtor: async () => null }));
+    assert.deepEqual([missing.ok, missing.errors.debtorId], [false, 'Devedor não encontrado.']);
+    const cancelled = await createSubscription('u1', { ...raw, debtorId: 'dv' }, deps({ lookupDebtor: async () => ({ id: 'dv', status: 'cancelled' }) }));
+    assert.equal(cancelled.ok, false);
+    assert.ok(cancelled.errors.debtorId);
+  });
+
+  it('conta + cartão (comportamento anterior) continua aceito', async () => {
+    const r = await createSubscription('u1', { ...raw, accountId: 'a1', cardId: 'c1' }, deps({ lookupCard: async () => ({ id: 'c1', status: 'active' }) }));
+    assert.equal(r.ok, true);
+    assert.deepEqual([deps.created.accountId, deps.created.cardId], ['a1', 'c1']);
+  });
+
+  it('editar removendo conta/cartão/devedor envia null (deleteField) — o vínculo é de fato removido', async () => {
+    const updates = [];
+    const r = await updateSubscription('u1', 's1', raw, deps({ update: async (u, c, id, data) => { updates.push(data); }, getById: async () => ({ id: 's1' }) }));
+    assert.equal(r.ok, true);
+    const written = updates[0];
+    assert.deepEqual([written.accountId, written.cardId, written.debtorId], [null, null, null]);
   });
 });

@@ -111,6 +111,12 @@ describe('devedores — arquivamento lógico', () => {
     await seed(UID, 'debts', 'p', { debtorId: 'dev', description: 'P', principalCents: 5000, dueDate: '2026-12-10', installmentNumber: 1, status: 'paid' });
     await seed(UID, 'debtors', 'solto', { name: 'S', loanDate: '2026-11-10', lentCents: 0, receivedCents: 0, status: 'open' });
     assert.equal((await call(UID, 'debtor.delete', opId(), { debtorId: 'dev' })).body.error, 'HAS_HISTORY');
+    // VF-COR-07: devedor vinculado a uma ASSINATURA (que gera valor a receber dele) também não pode ser apagado
+    await seed(UID, 'debtors', 'com-assinatura', { name: 'A', loanDate: '2026-11-10', lentCents: 0, receivedCents: 0, status: 'open' });
+    await seed(UID, 'subscriptions', 'sub1', { name: 'Netflix', amountCents: 5590, periodicity: 'monthly', nextChargeDate: '2026-12-05', categoryId: 'cat', status: 'active', debtorId: 'com-assinatura' });
+    const blocked = await call(UID, 'debtor.delete', opId(), { debtorId: 'com-assinatura' });
+    assert.deepEqual([blocked.status, blocked.body.error], [409, 'HAS_HISTORY']);
+    assert.ok(await getDoc('debtors', 'com-assinatura'));
     await callOk(UID, 'debtor.delete', opId(), { debtorId: 'solto' });
     assert.equal(await getDoc('debtors', 'solto'), null);
     assert.ok(await getDoc('debtors', 'dev'));

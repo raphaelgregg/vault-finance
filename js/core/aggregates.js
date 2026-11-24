@@ -85,7 +85,7 @@ export function upcomingDue({ expenses = [], subscriptions = [], invoices = [], 
   }
   // Assinatura cobrada no cartão já está dentro da fatura (VF-2-03r): listá-la também duplicaria o vencimento.
   for (const s of subscriptions) {
-    if (s?.cardId) continue;
+    if (s?.cardId || !s?.accountId) continue; // sem conta (só devedor/acompanhamento) não vence na SUA conta
     if (s?.status === 'active' && s.nextChargeDate >= today) {
       items.push({ kind: 'subscription', id: s.id, label: s.name, date: s.nextChargeDate, amountCents: cents(s.amountCents) });
     }

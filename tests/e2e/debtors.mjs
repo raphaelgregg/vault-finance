@@ -532,12 +532,14 @@ try {
   };
   const cancelAllText = await cancelFromUi('Cancela Tudo', 'Sofá');
   assert.match(cancelAllText, /Cancelar 3 parcela\(s\) pendente\(s\) de "Sofá"/);
+  await page.evaluate(() => document.querySelector('.toast')?.remove()); // toast antigo não pode satisfazer a espera abaixo
   await page.getByRole('button', { name: 'Cancelar dívida', exact: true }).click();
   await page.waitForFunction(() => /Dívida cancelada \(3 parcela\(s\)\)/.test(document.querySelector('.toast')?.innerText ?? ''));
   assert.deepEqual(await debtStatuses('Cancela Tudo'), ['cancelled', 'cancelled', 'cancelled']);
   const partialText = await cancelFromUi('Cancela Parcial', 'Mesa');
   assert.match(partialText, /Cancelar 1 parcela\(s\)/);
   assert.match(partialText, /1 parcela\(s\) com recebimento serão mantidas/);
+  await page.evaluate(() => document.querySelector('.toast')?.remove()); // toast antigo não pode satisfazer a espera abaixo
   await page.getByRole('button', { name: 'Cancelar dívida', exact: true }).click();
   await page.waitForFunction(() => /Dívida cancelada \(1 parcela\(s\)\)/.test(document.querySelector('.toast')?.innerText ?? ''));
   assert.deepEqual(await debtStatuses('Cancela Parcial'), ['paid', 'pending', 'cancelled']); // 2ª tem recebimento parcial: mantida
@@ -566,6 +568,7 @@ try {
   await page.getByLabel('Selecionar parcela 4 de Carro').check();
   assert.match(await page.locator('#cancel-selected-count').innerText(), /2 parcela\(s\) selecionada\(s\) · R\$\s?200,00/);
   await page.locator('#cancel-selected').click();
+  await page.evaluate(() => document.querySelector('.toast')?.remove()); // toast antigo não pode satisfazer a espera abaixo
   await page.getByRole('button', { name: 'Cancelar 2 parcela(s)', exact: true }).click();
   await page.waitForFunction(() => /2 parcela\(s\) cancelada\(s\)\./.test(document.querySelector('.toast')?.innerText ?? ''));
   assert.deepEqual(await debtStatuses('Cancela Varias'), ['pending', 'cancelled', 'pending', 'cancelled']);
@@ -579,9 +582,50 @@ try {
   await page.waitForSelector('#cancel-selected:not([disabled])');
   assert.match(await page.locator('#cancel-selected-count').innerText(), /2 parcela\(s\) selecionada\(s\)/);
   await page.locator('#cancel-selected').click();
+  await page.evaluate(() => document.querySelector('.toast')?.remove()); // toast antigo não pode satisfazer a espera abaixo
   await page.getByRole('button', { name: 'Cancelar 2 parcela(s)', exact: true }).click();
   await page.waitForFunction(() => /2 parcela\(s\) cancelada\(s\)\./.test(document.querySelector('.toast')?.innerText ?? ''));
   assert.deepEqual(await debtStatuses('Cancela Varias'), ['cancelled', 'cancelled', 'cancelled', 'cancelled']);
+
+  log('VF-COR-07: assinatura sem conta — com devedor (cria dívida a receber) e sem vínculo (só acompanhamento)');
+  await page.evaluate(async () => {
+    const { createDebtor } = await import('/js/services/debtors.js');
+    const { auth } = await import('/js/firebase/client.js');
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+    await createDebtor(auth.currentUser.uid, { name: 'Roberta', lentCents: '0,00', loanDate: today });
+  });
+  await page.goto(`${app.base}/pages/assinaturas.html`);
+  await page.waitForSelector('#page-content .panel');
+  await page.getByRole('button', { name: /Nova assinatura/ }).click();
+  assert.equal(await page.locator('#accountId').getAttribute('required'), null, 'conta não é mais obrigatória');
+  await page.fill('#name', 'Disney');
+  await page.fill('#amountCents', '33,90');
+  await page.selectOption('#categoryId', { index: 1 });
+  await page.selectOption('#debtorId', { label: 'Roberta' });
+  await page.locator('#subscription-form button[type="submit"]').click();
+  await page.waitForFunction(() => /Disney/.test(document.querySelector('#page-content tbody')?.innerText ?? ''));
+  assert.match(await page.locator('#page-content tbody tr', { hasText: 'Disney' }).innerText(), /Devedor Roberta/);
+  await page.getByRole('button', { name: 'Registrar cobrança de Disney' }).click();
+  await page.waitForFunction(() => /Dívida criada para Roberta/.test(document.querySelector('.toast')?.innerText ?? ''));
+  const roberta = await page.evaluate(async () => {
+    const { listDebtors } = await import('/js/services/debtors.js');
+    const { listDebts } = await import('/js/services/debtPayments.js');
+    const { auth } = await import('/js/firebase/client.js');
+    const uid = auth.currentUser.uid;
+    const debtor = (await listDebtors(uid)).find((d) => d.name === 'Roberta');
+    const debts = await listDebts(uid, debtor.id);
+    return { lentCents: debtor.lentCents, debts: debts.map((d) => [d.description, d.principalCents, d.status, d.installmentsTotal]) };
+  });
+  assert.deepEqual(roberta, { lentCents: 3390, debts: [['Disney', 3390, 'pending', 1]] });
+  await page.getByRole('button', { name: /Nova assinatura/ }).click();
+  await page.fill('#name', 'Cloud pessoal');
+  await page.fill('#amountCents', '9,90');
+  await page.selectOption('#categoryId', { index: 1 });
+  await page.locator('#subscription-form button[type="submit"]').click();
+  await page.waitForFunction(() => /Cloud pessoal/.test(document.querySelector('#page-content tbody')?.innerText ?? ''));
+  assert.match(await page.locator('#page-content tbody tr', { hasText: 'Cloud pessoal' }).innerText(), /Sem vínculo \(só acompanhamento\)/);
+  await page.getByRole('button', { name: 'Registrar cobrança de Cloud pessoal' }).click();
+  await page.waitForFunction(() => /Sem cartão nem devedor: não gera despesa/.test(document.querySelector('.toast')?.innerText ?? ''));
 
   await page.goto(`${app.base}/pages/dashboard.html`);
   await page.waitForSelector('#dashboard-month');

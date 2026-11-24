@@ -603,9 +603,9 @@ defineOp('debtor.delete', {
   async prepare(ctx, p) {
     const debtor = await ctx.get('debtors', p.debtorId);
     if (!debtor) throw new FinanceError(404, 'NOT_FOUND', 'Devedor não encontrado.');
-    for (const coll of ['debts', 'debtPayments', 'cardPurchases', 'reversals']) {
+    for (const coll of ['debts', 'debtPayments', 'cardPurchases', 'reversals', 'subscriptions']) {
       const snap = await ctx.tx.get(ctx.col(coll).where('debtorId', '==', debtor.id).limit(1));
-      if (!snap.empty) throw new FinanceError(409, 'HAS_HISTORY', 'O devedor possui dívidas, compras ou recebimentos e não pode ser apagado; arquive-o para preservar o histórico.', { collection: coll });
+      if (!snap.empty) throw new FinanceError(409, 'HAS_HISTORY', 'O devedor possui dívidas, compras, assinaturas ou recebimentos e não pode ser apagado; arquive-o para preservar o histórico.', { collection: coll });
     }
     return { result: { debtorId: debtor.id, deleted: true }, apply(c) { c.tx.delete(c.ref('debtors', debtor.id)); } };
   },
