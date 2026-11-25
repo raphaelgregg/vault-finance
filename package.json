@@ -24,6 +24,6 @@
     "firebase-tools": "^13.23.1"
   },
   "dependencies": {
-    "firebase-admin": "^12.7.0"
+    "firebase-admin": "^14.5.1"
   }
 }

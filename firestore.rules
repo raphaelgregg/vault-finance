@@ -514,10 +514,12 @@ service cloud.firestore {
         && keysOk(['action', 'entity', 'entityId', 'before', 'after', 'actorUid', 'createdAt'])
         && requiredOk(['action', 'entity', 'entityId', 'actorUid', 'createdAt'])
         && text('action', 60)
+        // VF-SEC-07: ações do servidor têm formato `dominio.operacao` (ex.: transfer.create, data.clearOwn); o cliente não as imita.
+        && !data().action.matches('.*[.].*')
         && text('entity', 60)
         && text('entityId', 128)
-        && (!('before' in data()) || data().before is map)
-        && (!('after' in data()) || data().after is map)
+        && (!('before' in data()) || (data().before is map && data().before.size() <= 60))
+        && (!('after' in data()) || (data().after is map && data().after.size() <= 60))
         && data().actorUid == request.auth.uid
         && data().createdAt == request.time;
       allow update, delete: if false;

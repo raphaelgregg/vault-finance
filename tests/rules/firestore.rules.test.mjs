@@ -420,6 +420,17 @@ describe('auditLog imutável', () => {
     assert.equal((await getDoc(doc(db, 'users', ALICE, 'expenses', ref.id))).exists(), false);
   });
 
+  it('VF-SEC-07: o cliente não imita ações do servidor (`dominio.operacao`) nem grava mapas gigantes', async () => {
+    const db = asUser(ALICE);
+    const base = { entity: 'operations', entityId: 'op-12345678', actorUid: ALICE, createdAt: serverTimestamp() };
+    for (const action of ['transfer.create', 'data.clearOwn', 'a.b']) {
+      await assertFails(addDoc(collection(db, 'users', ALICE, 'auditLog'), { ...base, action }));
+    }
+    const big = Object.fromEntries(Array.from({ length: 61 }, (_, i) => [`k${i}`, i]));
+    await assertFails(addDoc(collection(db, 'users', ALICE, 'auditLog'), { ...base, action: 'update', after: big }));
+    await assertSucceeds(addDoc(collection(db, 'users', ALICE, 'auditLog'), { ...base, action: 'update', after: { a: 1 } }));
+  });
+
   it('permite criar entrada com actorUid correto', async () => {
     const db = asUser(ALICE);
     await assertSucceeds(

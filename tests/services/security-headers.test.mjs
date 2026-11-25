@@ -51,6 +51,21 @@ describe('CSP (vercel.json)', () => {
   });
 });
 
+describe('VF-SEC-05 — CSP sem origens de terceiros genéricas', () => {
+  it('script-src não permite unpkg.com e frame-src só o domínio de autenticação do projeto', () => {
+    assert.ok(!directive('script-src').includes('unpkg.com'));
+    const frame = directive('frame-src');
+    assert.ok(!frame.includes('*') && frame.includes('https://vault-finance-d1603.firebaseapp.com'), frame);
+  });
+  it('o lucide local confere com o hash SRI das páginas', () => {
+    const file = fs.readFileSync(new URL('../../assets/vendor/lucide-0.462.0.min.js', import.meta.url));
+    const sri = `sha384-${crypto.createHash('sha384').update(file).digest('base64')}`;
+    for (const f of fs.readdirSync(new URL('../../pages', import.meta.url)).filter((n) => n.endsWith('.html'))) {
+      assert.ok(read(`pages/${f}`).includes(sri), f);
+    }
+  });
+});
+
 describe('SRI', () => {
   it('import map traz integrity sha384 para cada módulo Firebase', () => {
     const map = JSON.parse(runImportMap().textContent);
@@ -60,8 +75,9 @@ describe('SRI', () => {
     const pages = fs.readdirSync(new URL('../../pages', import.meta.url)).filter((f) => f.endsWith('.html'));
     assert.ok(pages.length > 0);
     for (const f of pages) {
-      const tag = read(`pages/${f}`).match(/<script[^>]*unpkg\.com[^>]*>/)?.[0];
+      const tag = read(`pages/${f}`).match(/<script[^>]*lucide[^>]*>/)?.[0];
       assert.ok(tag, f);
+      assert.ok(!/https?:/.test(tag.match(/src="([^"]*)"/)[1]), `${f}: lucide deve ser local (VF-SEC-05)`);
       assert.match(tag, /integrity="sha384-[A-Za-z0-9+/=]+"/, f);
       assert.match(tag, /crossorigin="anonymous"/, f);
     }

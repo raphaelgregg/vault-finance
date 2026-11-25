@@ -305,3 +305,14 @@ describe('exportação unificada: ida e volta idempotente', () => {
     assert.ok(parseCsv(r.text).rows.every((row) => row.values[UNIFIED_COLUMN] !== 'receitas'));
   });
 });
+
+describe('VF-SEC-08 — neutralização de fórmula inclui "-" em texto', () => {
+  it('texto iniciado por -, =, +, @ é prefixado; números e valores monetários negativos ficam intactos', async () => {
+    const { csvField } = await import('../../js/utils/csv.js');
+    for (const t of ['-2+3', '-cmd|x', '=1+1', '+1', '@SUM(A1)']) assert.equal(csvField(t), `'${t}`, t);
+    assert.equal(csvField(-5), '-5');
+    assert.equal(csvField('-12,50'), '-12,50');
+    assert.equal(csvField('-1.234,56'), '-1.234,56');
+    assert.equal(csvField('Mercado - mês'), 'Mercado - mês');
+  });
+});

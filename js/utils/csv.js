@@ -79,10 +79,12 @@ export function parseCsv(text, { delimiter } = {}) {
   return { delimiter: sep, headers, rows, errors };
 }
 
-/** Campo seguro para exportação: aspas quando preciso e proteção contra injeção de fórmula (=, +, @, tab, CR). */
+/** Campo seguro para exportação: aspas quando preciso e proteção contra injeção de fórmula (=, +, -, @, tab, CR).
+ * `-` só é neutralizado em TEXTO: número (inclusive negativo) segue intacto (VF-SEC-08). */
 export function csvField(value, delimiter = ';') {
   let text = value === null || value === undefined ? '' : String(value);
-  if (/^[=+@\t\r]/.test(text)) text = `'${text}`;
+  const isNumber = typeof value === 'number' && Number.isFinite(value);
+  if (/^[=+@\t\r]/.test(text) || (!isNumber && /^-/.test(text) && !/^-\d[\d.]*(,\d+)?$/.test(text))) text = `'${text}`;
   return /["\r\n]/.test(text) || text.includes(delimiter) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 

@@ -26,6 +26,7 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high # VF-SEC-09: dependências de produção sem altas/críticas
       - run: npm run lint
       - run: npm run test:unit
 
