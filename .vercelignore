@@ -1,0 +1,15 @@
+# VF-SEC-04 — nada disto precisa ir para a Vercel (evita servir arquivos internos como estáticos).
+# NÃO ignore `server/`, `api/`, `js/` nem `package*.json`: as funções (`api/*.mjs`) importam `server/` e `js/core`.
+PLAN.md
+CLAUDE.md
+README.md
+docs/
+tests/
+scripts/
+.github/
+firestore.rules
+firestore.indexes.json
+firebase.json
+.firebaserc
+firestore-debug.log
+*.log

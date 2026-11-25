@@ -2,6 +2,9 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
   "trailingSlash": false,
+  "redirects": [
+    { "source": "/(server|tests|docs|scripts)/:path*", "destination": "/", "permanent": false }
+  ],
   "functions": {
     "api/finance.mjs": { "maxDuration": 30 },
     "api/validation.mjs": { "maxDuration": 60 }

@@ -20,6 +20,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { accountBalances } from '../../js/core/model.js';
 import { isDateFieldName, parseIsoDate, dateToIsoDate } from '../../js/utils/dates.js';
 import { isValidIsoDate } from '../../js/core/model.js';
+import { assertNoEmulatorInProduction as guardEmulatorEnv } from '../env-guard.mjs';
 
 export { FieldValue, Timestamp };
 
@@ -50,9 +51,18 @@ function serviceAccountFromEnv(env) {
   return { ...parsed, private_key: String(parsed.private_key ?? '').replace(/\\r\\n|\\n/g, '\n').trim() };
 }
 
+/** VF-SEC-02: ver `server/env-guard.mjs`. */
+export function assertNoEmulatorInProduction(env = process.env) {
+  try { guardEmulatorEnv(env); } catch (error) { throw new FinanceError(500, error.code ?? 'EMULATOR_IN_PRODUCTION', error.message); }
+}
+
+/** VF-SEC-01: janela máxima (s) entre o login e uma operação destrutiva sensível. */
+export const RECENT_LOGIN_SECONDS = 300;
+
 let defaultAdmin = null;
 /** Admin SDK padrão (db + auth). Em testes injeta-se `deps` e isto não é chamado. */
 export function getAdmin(env = process.env) {
+  assertNoEmulatorInProduction(env);
   if (defaultAdmin) return defaultAdmin;
   const emulator = Boolean(env.FIRESTORE_EMULATOR_HOST);
   const projectId = env.FIREBASE_PROJECT_ID || env.GCLOUD_PROJECT || 'vault-finance-d1603';
@@ -63,7 +73,8 @@ export function getAdmin(env = process.env) {
   }
   const db = getFirestore();
   try { db.settings({ ignoreUndefinedProperties: true }); } catch { /* já inicializado por outro módulo/teste: segue com as configurações existentes */ }
-  defaultAdmin = { db, verifyIdToken: (token) => getAuth().verifyIdToken(token) };
+  defaultAdmin = { db, // checkRevoked=true: conta desativada/sessão revogada deixam de valer na hora (VF-SEC-01), não em até 1 h.
+  verifyIdToken: (token) => getAuth().verifyIdToken(token, true) };
   return defaultAdmin;
 }
 
@@ -292,6 +303,14 @@ export async function handleFinance({ method, headers = {}, body }, deps = {}) {
     // O cliente NUNCA define saldo, total recebido ou status financeiro: campos proibidos são recusados, não ignorados.
     for (const forbidden of ['balanceCents', 'receivedCents', 'status', 'uid', 'userId']) {
       if (forbidden in params && !def.allowParams?.includes(forbidden)) throw new FinanceError(400, 'FORBIDDEN_PARAM', `"${forbidden}" não é aceito do cliente.`, { field: forbidden });
+    }
+    // VF-SEC-01: operações destrutivas exigem login recente (`auth_time` do token); token roubado/antigo não apaga dados.
+    if (def.recentLogin) {
+      const authTime = Number(decoded.auth_time);
+      const nowS = Math.floor((deps.now ? deps.now() : Date.now()) / 1000);
+      if (!Number.isFinite(authTime) || nowS - authTime > RECENT_LOGIN_SECONDS) {
+        throw new FinanceError(403, 'RECENT_LOGIN_REQUIRED', 'Por segurança, saia e entre novamente na sua conta e repita a operação.');
+      }
     }
     const clean = def.validate(params);
     const started = Date.now();

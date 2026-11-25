@@ -21,6 +21,7 @@
  */
 import { createSign, createVerify, createPublicKey } from 'node:crypto';
 import { firebaseConfig } from '../../js/firebase/config.js';
+import { assertNoEmulatorInProduction } from '../env-guard.mjs';
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const CERTS_URL = 'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';
@@ -276,6 +277,9 @@ const byAdminThenEmail = (a, b) => Number(b.admin) - Number(a.admin) || String(a
 export async function handleAdminClaims(request, { env = process.env, fetch = globalThis.fetch, now = Date.now } = {}) {
   const method = request?.method;
   if (method !== 'POST' && method !== 'GET') return fail(405, 'method_not_allowed', 'Use GET (listar) ou POST (promover/revogar).');
+
+  // VF-SEC-02: o modo emulador aceita tokens sem assinatura — recusado em produção/preview da Vercel.
+  try { assertNoEmulatorInProduction(env); } catch (error) { return reject(500, error.code, error.message, { step: 'env_guard' }); }
 
   let target = '';
   let wantAdmin;

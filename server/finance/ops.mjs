@@ -693,6 +693,7 @@ export const CLEAR_ORDER = ['goalTransactions', 'goals', 'debtors', 'creditCards
 export const CLEAR_PHRASE = 'APAGAR MEUS DADOS';
 
 defineOp('data.clearOwn', {
+  recentLogin: true, // VF-SEC-01: exige login recente
   validate: (p) => {
     if (p.confirm !== CLEAR_PHRASE) throw new FinanceError(400, 'CONFIRMATION_REQUIRED', `Digite a frase de confirmação: ${CLEAR_PHRASE}.`);
     return { confirm: CLEAR_PHRASE };
