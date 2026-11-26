@@ -69,3 +69,14 @@ describe('VF-SEC-04 — arquivos internos fora do deploy', () => {
     assert.ok(rule && /tests/.test(rule.source) && rule.permanent === false);
   });
 });
+
+describe('VF-SEC-09 — o servidor carrega sem require() de módulo ESM (runtime da Vercel)', () => {
+  it('importa a camada financeira e a validação com --no-experimental-require-module', async () => {
+    // Regressão: firebase-admin 14 → jwks-rsa → jose (ESM) quebrava na Vercel com ERR_REQUIRE_ESM (500 em /api/finance),
+    // mas passava local porque o Node recente permite require(esm).
+    const { execFileSync } = await import('node:child_process');
+    const code = "Promise.all([import('./server/finance/index.mjs'), import('./server/validation/center.mjs'), import('./server/admin/claims.mjs')]).then(() => console.info('ok'))";
+    const out = execFileSync(process.execPath, ['--no-experimental-require-module', '-e', code], { cwd: new URL('../../', import.meta.url), encoding: 'utf8' });
+    assert.match(out, /ok/);
+  });
+});
