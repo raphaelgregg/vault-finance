@@ -1,7 +1,8 @@
 /**
  * Cartões — VF-2-03d (UI). Cartões, compras (à vista/parceladas) e faturas.
  * Limite usado/disponível e total de fatura aberta são derivados; fechar grava o total e pagar
- * marca a fatura como paga (não movimenta conta — ver js/services/creditCards.js).
+ * é feito no servidor (`invoice.pay`): debita a conta escolhida e marca a fatura como paga
+ * (ver js/services/creditCards.js).
  */
 import { brDateInput, brMonthInput } from '../components/date-input.js';
 import { el, toast, refreshIcons } from '../components/dom.js';

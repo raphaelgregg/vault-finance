@@ -8,9 +8,11 @@
  *   atômico — as Rules usam exists() e não enxergam documentos do mesmo lote.
  * - Ciclo: compra após o dia de fechamento vai para a fatura seguinte; faturas não abertas
  *   são puladas. Fatura: open → closed (soma das parcelas) → paid (pagamento integral).
+ * - Pagamento (VF-ARQ-02): `payInvoice` chama o SERVIDOR (`invoice.pay`), que debita a conta escolhida uma vez,
+ *   recalcula o total das compras na transação e grava `status`, `paidCents`, `accountId` e `paidAt`.
+ *   Cancelamento só de fatura aberta sem compras (`cancelInvoice`).
  * Limitações: leitura prévia + lote sem transação (compras simultâneas podem estourar o limite
- * ou regravar uma fatura recém-criada); pagar a fatura NÃO movimenta conta (o schema `invoices`
- * não tem `accountId`); sem cancelamento de fatura nem pagamento parcial.
+ * ou regravar uma fatura recém-criada); sem pagamento parcial de fatura.
  */
 import { COLLECTIONS } from '../utils/constants.js';
 import { financeResult } from './financeApi.js';

@@ -37,7 +37,7 @@ Compras do cartão **não são despesas** e não reduzem o saldo: o saldo da con
 
 ## Armadilhas
 
-- O **comentário do topo** de `js/services/creditCards.js` e o cabeçalho de `js/modules/cartoes.js` estão **desatualizados**: ainda dizem que pagar a fatura não movimenta conta. Vale o comportamento acima (`payInvoice`/`invoice.pay`, VF-2-03p/VF-ARQ-02).
+- Os comentários do topo de `js/services/creditCards.js` e de `js/modules/cartoes.js` já descrevem o pagamento pelo servidor (`payInvoice`/`invoice.pay`, VF-2-03p/VF-ARQ-02). Se ler algo que diga que pagar fatura "não movimenta conta", é versão antiga.
 - Sem transação no cliente: compras simultâneas podem estourar o limite (limitação conhecida).
 - Pagamento parcial de fatura não existe.
 - Assinaturas no cartão entram como parcela 1x na fatura aberta ([Assinaturas](doc:assinaturas)).
