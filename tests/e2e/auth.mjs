@@ -40,7 +40,7 @@ try {
   assert.match(await err('currentPassword'), /Informe a senha atual/);
   assert.match(await err('newPassword'), /Informe a nova senha/);
   await fill(password, '12345', '12345');
-  assert.match(await err('newPassword'), /ao menos 6/);
+  assert.match(await err('newPassword'), /ao menos 10/);
   await fill(password, password, password);
   assert.match(await err('newPassword'), /diferente da senha atual/);
   await fill(password, 'NovaSenha#2026', 'OutraSenha#2026');
