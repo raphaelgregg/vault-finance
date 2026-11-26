@@ -114,6 +114,7 @@ describe('VF-SEC-03/06 — App Check e e-mail verificado (opcionais, por variáv
   it('REQUIRE_VERIFIED_EMAIL=true: e-mail não verificado → 403 EMAIL_NOT_VERIFIED', async () => {
     const env = { REQUIRE_VERIFIED_EMAIL: 'true' };
     assert.deepEqual((r => [r.status, r.body.error])(await call({}, { uid: 'a', email_verified: false }, env)), [403, 'EMAIL_NOT_VERIFIED']);
+    assert.match((await call({}, { uid: 'a', email_verified: false }, env)).body.message, /Configurações.*Enviar e-mail de verificação/);
     assert.notEqual((await call({}, { uid: 'a', email_verified: true }, env)).body.error, 'EMAIL_NOT_VERIFIED');
   });
 });

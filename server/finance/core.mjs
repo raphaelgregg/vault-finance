@@ -72,7 +72,7 @@ export async function enforceAppCheck(headers = {}, admin = {}, env = process.en
 }
 export function enforceVerifiedEmail(decoded, env = process.env) {
   if (env.REQUIRE_VERIFIED_EMAIL === 'true' && decoded?.email_verified !== true) {
-    throw new FinanceError(403, 'EMAIL_NOT_VERIFIED', 'Confirme seu e-mail (enviamos um link no cadastro) para continuar.');
+    throw new FinanceError(403, 'EMAIL_NOT_VERIFIED', 'Confirme seu e-mail para continuar: abra Configurações → Segurança — e-mail, clique em "Enviar e-mail de verificação", abra o link e depois em "Já verifiquei".');
   }
 }
 
