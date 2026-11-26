@@ -74,7 +74,7 @@ Estas **não estão no repositório**; se o projeto for recriado, refaça:
 
 - **Authentication → Settings → Ações do usuário:** *Email enumeration protection* ativa.
 - **Authentication → Settings → Política de senha:** mínimo 10, sem exigir classes de caractere, modo **"Exigir a aplicação"** (quem tem senha curta só entra após redefinir por e-mail).
-- **Google Cloud → APIs e serviços → Credenciais → chave de navegador:** restrição por **referenciadores HTTP** (domínios de produção, previews usados, `localhost:5500` e `vault-finance-d1603.firebaseapp.com`) e por **API** (Cloud Firestore, Identity Toolkit, Token Service).
+- **Google Cloud → APIs e serviços → Credenciais → chave de navegador:** restrição por **referenciadores HTTP** (domínios de produção, previews usados, `localhost:5500` e `vault-finance-d1603.firebaseapp.com`) e por **API** (Cloud Firestore, Identity Toolkit, Token Service). **Todo preview de branch nova precisa ter o domínio adicionado aqui**, senão o login falha (ver [Runbooks](doc:runbooks#dominio-ou-preview-novo-nao-autentica)).
 - **Vercel → Firewall:** regra "Limite da API": caminho começa com `/api/`, janela fixa de 60 s, **30 requisições por IP**, resposta 429.
 - **Contas administradoras:** a claim `admin` é concedida pelo próprio app (ver [Administração](doc:administracao)); o primeiro administrador precisa ser definido fora do app (console ou Admin SDK).
 

@@ -85,6 +85,18 @@ O `firebase-admin` 14 **quebrou** `/api/finance` na Vercel com `ERR_REQUIRE_ESM`
 
 Sintoma: leituras/escritas falham até o dia seguinte. Veja *Firestore → Uso*. Se o consumo não é seu: revise o Firewall (rate limit), as restrições da chave web e a lista de usuários em *Authentication*; considere reabrir o App Check (ver [Segurança](doc:seguranca)). Se é legítimo, reduza leituras (tetos `READ_LIMIT`, paginação) ou avalie o plano.
 
+## Domínio ou preview novo não autentica
+
+Sintoma: no preview de uma branch (ou em um domínio novo) o login falha com erro do Firebase (`auth/permission-denied-on-the-service` ou "requests from referer … are blocked"). Causa: a **chave de API web** só aceita os referenciadores listados.
+
+1. Google Cloud → *APIs e serviços → Credenciais* → chave "Browser key (auto created by Firebase)".
+2. Em *Restrições de sites*, adicione `https://<domínio>/*` (ex.: `https://my-vault-git-claude-dev-raphaelgreggs-projects.vercel.app/*`). Use o endereço da **branch**, não o de cada deploy (que muda a cada push).
+3. Salve e aguarde de 1 a 5 minutos; recarregue com `Ctrl+F5`.
+4. Opcional: *Authentication → Settings → Domínios autorizados* com o mesmo domínio.
+5. Se a Vercel pedir login antes de abrir o preview, é a proteção de deploys da Vercel (outro assunto).
+
+Aconteceu quando a branch de trabalho mudou de `claude` para `claude-dev`: toda **branch nova** precisa do domínio na lista.
+
 ## Usuário não consegue entrar
 
 1. **Senha curta:** com a política "Exigir", senhas < 10 só entram após **redefinir por e-mail** ("Esqueci a senha").

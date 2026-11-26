@@ -205,7 +205,7 @@
      "id": "configuracoes-feitas-no-console-fora-do-codigo",
      "heading": "Configurações feitas no console (fora do código)",
      "level": 2,
-     "md": "Estas **não estão no repositório**; se o projeto for recriado, refaça:\n\n- **Authentication → Settings → Ações do usuário:** *Email enumeration protection* ativa.\n- **Authentication → Settings → Política de senha:** mínimo 10, sem exigir classes de caractere, modo **\"Exigir a aplicação\"** (quem tem senha curta só entra após redefinir por e-mail).\n- **Google Cloud → APIs e serviços → Credenciais → chave de navegador:** restrição por **referenciadores HTTP** (domínios de produção, previews usados, `localhost:5500` e `vault-finance-d1603.firebaseapp.com`) e por **API** (Cloud Firestore, Identity Toolkit, Token Service).\n- **Vercel → Firewall:** regra \"Limite da API\": caminho começa com `/api/`, janela fixa de 60 s, **30 requisições por IP**, resposta 429.\n- **Contas administradoras:** a claim `admin` é concedida pelo próprio app (ver [Administração](doc:administracao)); o primeiro administrador precisa ser definido fora do app (console ou Admin SDK)."
+     "md": "Estas **não estão no repositório**; se o projeto for recriado, refaça:\n\n- **Authentication → Settings → Ações do usuário:** *Email enumeration protection* ativa.\n- **Authentication → Settings → Política de senha:** mínimo 10, sem exigir classes de caractere, modo **\"Exigir a aplicação\"** (quem tem senha curta só entra após redefinir por e-mail).\n- **Google Cloud → APIs e serviços → Credenciais → chave de navegador:** restrição por **referenciadores HTTP** (domínios de produção, previews usados, `localhost:5500` e `vault-finance-d1603.firebaseapp.com`) e por **API** (Cloud Firestore, Identity Toolkit, Token Service). **Todo preview de branch nova precisa ter o domínio adicionado aqui**, senão o login falha (ver [Runbooks](doc:runbooks#dominio-ou-preview-novo-nao-autentica)).\n- **Vercel → Firewall:** regra \"Limite da API\": caminho começa com `/api/`, janela fixa de 60 s, **30 requisições por IP**, resposta 429.\n- **Contas administradoras:** a claim `admin` é concedida pelo próprio app (ver [Administração](doc:administracao)); o primeiro administrador precisa ser definido fora do app (console ou Admin SDK)."
     },
     {
      "id": "ci-e-automacoes-github-actions",
@@ -1438,6 +1438,12 @@
      "heading": "Cota do Firestore estourou",
      "level": 2,
      "md": "Sintoma: leituras/escritas falham até o dia seguinte. Veja *Firestore → Uso*. Se o consumo não é seu: revise o Firewall (rate limit), as restrições da chave web e a lista de usuários em *Authentication*; considere reabrir o App Check (ver [Segurança](doc:seguranca)). Se é legítimo, reduza leituras (tetos `READ_LIMIT`, paginação) ou avalie o plano."
+    },
+    {
+     "id": "dominio-ou-preview-novo-nao-autentica",
+     "heading": "Domínio ou preview novo não autentica",
+     "level": 2,
+     "md": "Sintoma: no preview de uma branch (ou em um domínio novo) o login falha com erro do Firebase (`auth/permission-denied-on-the-service` ou \"requests from referer … are blocked\"). Causa: a **chave de API web** só aceita os referenciadores listados.\n\n1. Google Cloud → *APIs e serviços → Credenciais* → chave \"Browser key (auto created by Firebase)\".\n2. Em *Restrições de sites*, adicione `https://<domínio>/*` (ex.: `https://my-vault-git-claude-dev-raphaelgreggs-projects.vercel.app/*`). Use o endereço da **branch**, não o de cada deploy (que muda a cada push).\n3. Salve e aguarde de 1 a 5 minutos; recarregue com `Ctrl+F5`.\n4. Opcional: *Authentication → Settings → Domínios autorizados* com o mesmo domínio.\n5. Se a Vercel pedir login antes de abrir o preview, é a proteção de deploys da Vercel (outro assunto).\n\nAconteceu quando a branch de trabalho mudou de `claude` para `claude-dev`: toda **branch nova** precisa do domínio na lista."
     },
     {
      "id": "usuario-nao-consegue-entrar",
