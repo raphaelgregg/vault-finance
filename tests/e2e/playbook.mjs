@@ -45,11 +45,14 @@ try {
   assert.ok((await page.locator('.pb-card').count()) >= 20);
 
   log('busca: sem acento e sem caixa, realce, e o resultado abre a seção certa');
+  const counted = (text) => page.waitForFunction((t) => (document.querySelector('#playbook-count')?.innerText ?? '').includes(t), text); // espera o debounce da busca
   await page.fill('#playbook-search', 'configuracoes senha politica');
+  await counted('configuracoes senha politica');
   await page.waitForSelector('#playbook-results:not([hidden]) .pb-result');
   assert.ok((await page.locator('.pb-result').count()) >= 1);
   assert.ok((await page.locator('.pb-result mark').count()) >= 1, 'termos realçados');
   await page.fill('#playbook-search', 'saldo derivado');
+  await counted('saldo derivado');
   await page.waitForSelector('#playbook-results:not([hidden]) .pb-result');
   assert.match(await page.locator('.pb-result').first().innerText(), /Núcleo financeiro|Bancos|Dashboard|Receitas|Despesas|Arquitetura/);
   await page.locator('.pb-result').first().click();
@@ -64,7 +67,7 @@ try {
 
   log('filtros: categoria + tag listam documentos; tabela e código renderizam sem HTML cru');
   await page.selectOption('#playbook-category', 'Runbooks');
-  await page.waitForSelector('#playbook-results:not([hidden]) .pb-result');
+  await page.waitForFunction(() => /documento\(s\) no filtro/.test(document.querySelector('#playbook-results')?.innerText ?? ''));
   assert.equal(await page.locator('.pb-result').count(), 1);
   await page.selectOption('#playbook-category', '');
   await page.goto(`${app.base}/pages/playbook.html#doc/referencia-gerada`);
