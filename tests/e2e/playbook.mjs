@@ -34,6 +34,8 @@ try {
     method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer owner' }, body: JSON.stringify({ localId: uid, customAttributes: JSON.stringify({ admin: true }) }),
   });
   assert.equal(claim.ok, true);
+  // A claim só entra no token renovado (o link usa o token em cache, sem rede extra).
+  await page.evaluate(async () => (await import('/js/firebase/client.js')).auth.currentUser.getIdToken(true));
   await page.goto(`${app.base}/pages/configuracoes.html`);
   await page.waitForSelector('#link-playbook');
   await page.goto(`${app.base}/pages/playbook.html`);
