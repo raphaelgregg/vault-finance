@@ -27,6 +27,7 @@ try {
   assert.equal(await page.locator('.pb').count(), 0);
   const configLink = await page.goto(`${app.base}/pages/configuracoes.html`).then(() => page.locator('#link-playbook').count());
   assert.equal(configLink, 0, 'link do playbook não aparece para não-admin');
+  app.problems.length = 0; // o 403 provocado acima de propósito aparece no console do navegador: não é falha
 
   log('administrador: a página carrega com sumário e home por categorias');
   const uid = await page.evaluate(async () => (await import('/js/firebase/client.js')).auth.currentUser.uid);
