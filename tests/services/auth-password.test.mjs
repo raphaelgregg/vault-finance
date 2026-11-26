@@ -98,7 +98,7 @@ describe('e-mail de redefinição e mensagens', () => {
   });
   it('traduz os códigos pedidos', () => {
     const expected = {
-      'auth/invalid-credential': /incorretos/, 'auth/wrong-password': /incorreta/, 'auth/weak-password': /10 caracteres/,
+      'auth/invalid-credential': /incorretos/, 'auth/wrong-password': /incorreta/, 'auth/weak-password': /10 caracteres/, 'auth/password-does-not-meet-requirements': /10 caracteres/,
       'auth/too-many-requests': /Muitas tentativas/, 'auth/requires-recent-login': /entre novamente/, 'auth/network-request-failed': /conexão/,
     };
     for (const [code, re] of Object.entries(expected)) assert.match(authErrorMessage({ code }), re, code);

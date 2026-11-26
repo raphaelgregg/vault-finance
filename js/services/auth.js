@@ -27,6 +27,7 @@ const AUTH_ERRORS = {
   'auth/invalid-credential': 'E-mail ou senha incorretos.',
   'auth/email-already-in-use': 'Este e-mail já está cadastrado.',
   'auth/weak-password': 'Senha fraca: use ao menos 10 caracteres.',
+  'auth/password-does-not-meet-requirements': 'A senha não atende à política de segurança: use ao menos 10 caracteres.',
   'auth/too-many-requests': 'Muitas tentativas. Aguarde alguns minutos.',
   'auth/network-request-failed': 'Sem conexão. Verifique sua internet.',
   'auth/operation-not-allowed': 'Login por e-mail/senha não está habilitado no Firebase.',
@@ -104,7 +105,7 @@ export async function changePassword(user, { current, next, confirm } = {}, io =
   try {
     await update(user, next);
   } catch (error) {
-    if (error?.code === 'auth/weak-password') return { ok: false, errors: { newPassword: authErrorMessage(error) } };
+    if (['auth/weak-password', 'auth/password-does-not-meet-requirements'].includes(error?.code)) return { ok: false, errors: { newPassword: authErrorMessage(error) } };
     return { ok: false, errors: { _form: authErrorMessage(error) } };
   }
   return { ok: true };
