@@ -80,3 +80,40 @@ describe('VF-SEC-09 — o servidor carrega sem require() de módulo ESM (runtime
     assert.match(out, /ok/);
   });
 });
+
+describe('VF-SEC-06 — política de senha do app', () => {
+  it('validateNewPassword: mínimo 10, máximo 128, recusa trivial', async () => {
+    const { validateNewPassword, MIN_PASSWORD_LENGTH } = await import('../../js/utils/password.js');
+    assert.equal(MIN_PASSWORD_LENGTH, 10);
+    assert.equal(validateNewPassword('curta123').ok, false);
+    assert.equal(validateNewPassword('a'.repeat(129)).ok, false);
+    assert.equal(validateNewPassword('aaaaaaaaaaaa').ok, false);
+    assert.equal(validateNewPassword('          ').ok, false);
+    assert.equal(validateNewPassword('cavalo-bateria-9').ok, true);
+  });
+});
+
+describe('VF-SEC-03/06 — App Check e e-mail verificado (opcionais, por variável de ambiente)', () => {
+  const body = { op: 'transfer.create', operationId: 'op-12345678', params: {} };
+  const call = (headers, decoded, env, extra = {}) => handleFinance(
+    { method: 'POST', headers: { authorization: 'Bearer t', ...headers }, body },
+    { db: {}, verifyIdToken: async () => decoded, log: () => {}, env, ...extra },
+  );
+  it('desligados por padrão: nada muda', async () => {
+    const r = await call({}, { uid: 'a' }, {});
+    assert.notEqual(r.body.error, 'APPCHECK_REQUIRED');
+    assert.notEqual(r.body.error, 'EMAIL_NOT_VERIFIED');
+  });
+  it('APPCHECK_ENFORCE=true: sem token → 401 APPCHECK_REQUIRED; inválido → 401 APPCHECK_INVALID; válido passa', async () => {
+    const env = { APPCHECK_ENFORCE: 'true' };
+    assert.deepEqual((r => [r.status, r.body.error])(await call({}, { uid: 'a' }, env)), [401, 'APPCHECK_REQUIRED']);
+    assert.deepEqual((r => [r.status, r.body.error])(await call({ 'x-firebase-appcheck': 'ruim' }, { uid: 'a' }, env, { verifyAppCheck: async () => { throw new Error('x'); } })), [401, 'APPCHECK_INVALID']);
+    const ok = await call({ 'x-firebase-appcheck': 'bom' }, { uid: 'a' }, env, { verifyAppCheck: async () => ({}) });
+    assert.ok(!['APPCHECK_REQUIRED', 'APPCHECK_INVALID'].includes(ok.body.error));
+  });
+  it('REQUIRE_VERIFIED_EMAIL=true: e-mail não verificado → 403 EMAIL_NOT_VERIFIED', async () => {
+    const env = { REQUIRE_VERIFIED_EMAIL: 'true' };
+    assert.deepEqual((r => [r.status, r.body.error])(await call({}, { uid: 'a', email_verified: false }, env)), [403, 'EMAIL_NOT_VERIFIED']);
+    assert.notEqual((await call({}, { uid: 'a', email_verified: true }, env)).body.error, 'EMAIL_NOT_VERIFIED');
+  });
+});

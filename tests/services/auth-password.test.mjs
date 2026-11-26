@@ -13,13 +13,13 @@ const fbError = (code) => Object.assign(new Error(code), { code });
 
 describe('validatePasswordChange (puro)', () => {
   it('aceita senha atual + nova válida + confirmação igual', () => {
-    assert.deepEqual(validatePasswordChange({ current: 'antiga1', next: 'novaSenha', confirm: 'novaSenha' }), { ok: true, errors: {} });
+    assert.deepEqual(validatePasswordChange({ current: 'antiga1', next: 'novaSenha10', confirm: 'novaSenha10' }), { ok: true, errors: {} });
   });
   it('erros por campo: vazios, curta, igual à atual, confirmação divergente', () => {
     assert.deepEqual(Object.keys(validatePasswordChange({}).errors).sort(), ['confirmPassword', 'currentPassword', 'newPassword']);
     assert.match(validatePasswordChange({ current: 'x', next: '12345', confirm: '12345' }).errors.newPassword, new RegExp(String(MIN_PASSWORD_LENGTH)));
-    assert.match(validatePasswordChange({ current: 'mesma123', next: 'mesma123', confirm: 'mesma123' }).errors.newPassword, /diferente/);
-    assert.match(validatePasswordChange({ current: 'a', next: 'novaSenha', confirm: 'outraSenha' }).errors.confirmPassword, /não confere/);
+    assert.match(validatePasswordChange({ current: 'mesmaSenha123', next: 'mesmaSenha123', confirm: 'mesmaSenha123' }).errors.newPassword, /diferente/);
+    assert.match(validatePasswordChange({ current: 'a', next: 'novaSenha10', confirm: 'outraSenha' }).errors.confirmPassword, /não confere/);
     assert.match(validatePasswordChange({ current: 'a', next: 'x'.repeat(129), confirm: 'x'.repeat(129) }).errors.newPassword, /no máximo/);
   });
   it('provedores: só `password` permite trocar; externos viram rótulo legível', () => {
@@ -72,7 +72,7 @@ describe('changePassword (reautentica ANTES de atualizar)', () => {
     const b = await changePassword(pwUser(), input, makeIo({ reauth: async () => { throw fbError('auth/network-request-failed'); } }).io);
     assert.match(b.errors._form, /conexão/);
     const c = await changePassword(pwUser(), input, makeIo({ update: async () => { throw fbError('auth/weak-password'); } }).io);
-    assert.match(c.errors.newPassword, /6 caracteres/);
+    assert.match(c.errors.newPassword, /10 caracteres/);
     const d = await changePassword(pwUser(), input, makeIo({ update: async () => { throw fbError('auth/requires-recent-login'); } }).io);
     assert.match(d.errors._form, /entre novamente/);
   });
@@ -98,7 +98,7 @@ describe('e-mail de redefinição e mensagens', () => {
   });
   it('traduz os códigos pedidos', () => {
     const expected = {
-      'auth/invalid-credential': /incorretos/, 'auth/wrong-password': /incorreta/, 'auth/weak-password': /6 caracteres/,
+      'auth/invalid-credential': /incorretos/, 'auth/wrong-password': /incorreta/, 'auth/weak-password': /10 caracteres/,
       'auth/too-many-requests': /Muitas tentativas/, 'auth/requires-recent-login': /entre novamente/, 'auth/network-request-failed': /conexão/,
     };
     for (const [code, re] of Object.entries(expected)) assert.match(authErrorMessage({ code }), re, code);

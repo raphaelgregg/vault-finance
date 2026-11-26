@@ -17,6 +17,7 @@ import { createHash } from 'node:crypto';
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
+import { getAppCheck } from 'firebase-admin/app-check';
 import { accountBalances } from '../../js/core/model.js';
 import { isDateFieldName, parseIsoDate, dateToIsoDate } from '../../js/utils/dates.js';
 import { isValidIsoDate } from '../../js/core/model.js';
@@ -54,6 +55,25 @@ function serviceAccountFromEnv(env) {
 /** VF-SEC-02: ver `server/env-guard.mjs`. */
 export function assertNoEmulatorInProduction(env = process.env) {
   try { guardEmulatorEnv(env); } catch (error) { throw new FinanceError(500, error.code ?? 'EMULATOR_IN_PRODUCTION', error.message); }
+}
+
+/**
+ * VF-SEC-03/06 — políticas de acesso opcionais, ligadas por variável de ambiente (desligadas por padrão, para não
+ * bloquear usuários antes de o cliente/console estarem prontos):
+ *  - APPCHECK_ENFORCE=true      exige o cabeçalho `X-Firebase-AppCheck` com token válido (só o app real chama a API);
+ *  - REQUIRE_VERIFIED_EMAIL=true exige `email_verified` no ID token (contas novas verificam o e-mail no cadastro).
+ * `verifyAppCheck` é injetável nos testes.
+ */
+export async function enforceAppCheck(headers = {}, admin = {}, env = process.env) {
+  if (env.APPCHECK_ENFORCE !== 'true') return;
+  const token = String(headers['x-firebase-appcheck'] ?? headers['X-Firebase-AppCheck'] ?? '').trim();
+  if (!token) throw new FinanceError(401, 'APPCHECK_REQUIRED', 'Requisição sem App Check: recarregue o aplicativo.');
+  try { await (admin.verifyAppCheck ?? ((t) => getAppCheck().verifyToken(t)))(token); } catch { throw new FinanceError(401, 'APPCHECK_INVALID', 'App Check inválido ou expirado: recarregue o aplicativo.'); }
+}
+export function enforceVerifiedEmail(decoded, env = process.env) {
+  if (env.REQUIRE_VERIFIED_EMAIL === 'true' && decoded?.email_verified !== true) {
+    throw new FinanceError(403, 'EMAIL_NOT_VERIFIED', 'Confirme seu e-mail (enviamos um link no cadastro) para continuar.');
+  }
 }
 
 /** VF-SEC-01: janela máxima (s) entre o login e uma operação destrutiva sensível. */
@@ -288,10 +308,12 @@ export async function handleFinance({ method, headers = {}, body }, deps = {}) {
     const auth = String(headers.authorization ?? headers.Authorization ?? '');
     const token = /^Bearer\s+(\S+)$/i.exec(auth)?.[1];
     if (!token) return json(401, { ok: false, error: 'UNAUTHENTICATED', message: 'Envie o Firebase ID token em Authorization: Bearer.' });
+    await enforceAppCheck(headers, admin, deps.env ?? process.env); // antes do Auth: barra bots sem custo de leitura
     let decoded;
     try { decoded = await admin.verifyIdToken(token); } catch { return json(401, { ok: false, error: 'INVALID_TOKEN', message: 'Token inválido ou expirado.' }); }
     const uid = decoded?.uid;
     if (!uid) return json(401, { ok: false, error: 'INVALID_TOKEN', message: 'Token sem usuário.' });
+    enforceVerifiedEmail(decoded, deps.env ?? process.env);
 
     const payload = typeof body === 'string' ? JSON.parse(body) : body;
     if (!payload || typeof payload !== 'object') throw new FinanceError(400, 'INVALID_BODY', 'Corpo JSON inválido.');

@@ -9,7 +9,7 @@
  *  - duplo envio da mesma chave dentro da página compartilha a mesma requisição (não há 2ª chamada).
  * A interface NUNCA atualiza saldos de forma otimista: recarrega os dados depois da confirmação do servidor.
  */
-import { auth } from '../firebase/client.js';
+import { auth, getAppCheckToken } from '../firebase/client.js';
 
 export const FINANCE_ENDPOINT = '/api/finance';
 
@@ -63,10 +63,11 @@ async function run(op, params, operationId, options) {
       refreshToken = false;
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
+      const appCheckToken = await (options.getAppCheckToken ?? getAppCheckToken)(); // VF-SEC-03 (null = App Check desligado)
       let response;
       try {
         response = await fetchImpl(endpoint, {
-          method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+          method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}`, ...(appCheckToken ? { 'x-firebase-appcheck': appCheckToken } : {}) },
           body: JSON.stringify({ op, operationId, params }), signal: controller.signal,
         });
       } finally { clearTimeout(timer); }

@@ -14,7 +14,7 @@
  */
 import '../finance/index.mjs';
 import { getAuth } from 'firebase-admin/auth';
-import { registry, executeOnce, FinanceError, getAdmin, toTs, plain, FieldValue } from '../finance/core.mjs';
+import { registry, executeOnce, FinanceError, getAdmin, toTs, plain, FieldValue, enforceAppCheck } from '../finance/core.mjs';
 import { buildEntity, SCHEMAS, accountBalances } from '../../js/core/model.js';
 import { todayInAppZone, parseIsoDate, dateToIsoDate } from '../../js/utils/dates.js';
 
@@ -91,6 +91,7 @@ async function authorize(headers, admin) {
   const header = String(headers?.authorization ?? headers?.Authorization ?? '');
   const token = /^Bearer\s+(\S+)$/i.exec(header)?.[1];
   if (!token) throw new FinanceError(401, 'UNAUTHENTICATED', 'Envie o Firebase ID token em Authorization: Bearer.');
+  await enforceAppCheck(headers, admin, admin.env ?? process.env);
   let decoded;
   try { decoded = await admin.verifyIdToken(token); } catch { throw new FinanceError(401, 'INVALID_TOKEN', 'Token inválido ou expirado.'); }
   if (!decoded?.uid) throw new FinanceError(401, 'INVALID_TOKEN', 'Token sem usuário.');

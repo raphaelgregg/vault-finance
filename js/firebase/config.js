@@ -16,6 +16,12 @@ export const firebaseConfig = {
   appId: '1:13396578383:web:b1ca1d8d0d0bdcac9f1a3a',
 };
 
+/**
+ * VF-SEC-03 — App Check (reCAPTCHA v3). Chave do SITE (pública por design). Vazia = App Check desligado.
+ * Crie em Firebase Console → App Check → Apps → Web → reCAPTCHA v3 e cole aqui a "site key".
+ */
+export const APP_CHECK_SITE_KEY = '';
+
 /** true = config ainda não preenchida (a UI mostra aviso em vez de falhar em silêncio) */
 export function isConfigPlaceholder(config = firebaseConfig) {
   return Object.values(config).some(

@@ -7,6 +7,7 @@ import {
   signInWithEmailAndPassword,
   signOut as fbSignOut,
   sendPasswordResetEmail,
+  sendEmailVerification,
   onAuthStateChanged,
   setPersistence,
   browserLocalPersistence,
@@ -25,7 +26,7 @@ const AUTH_ERRORS = {
   'auth/wrong-password': 'Senha incorreta.',
   'auth/invalid-credential': 'E-mail ou senha incorretos.',
   'auth/email-already-in-use': 'Este e-mail já está cadastrado.',
-  'auth/weak-password': 'A senha precisa ter ao menos 6 caracteres.',
+  'auth/weak-password': 'Senha fraca: use ao menos 10 caracteres.',
   'auth/too-many-requests': 'Muitas tentativas. Aguarde alguns minutos.',
   'auth/network-request-failed': 'Sem conexão. Verifique sua internet.',
   'auth/operation-not-allowed': 'Login por e-mail/senha não está habilitado no Firebase.',
@@ -48,6 +49,8 @@ export async function signIn(email, password) {
 export async function register(email, password, displayName) {
   const credential = await createUserWithEmailAndPassword(auth, String(email).trim(), password);
   if (displayName) await updateProfile(credential.user, { displayName });
+  // VF-SEC-06: e-mail de verificação (melhor esforço; falha de envio não impede o cadastro).
+  try { await sendEmailVerification(credential.user); } catch (error) { console.warn('[auth] verificação de e-mail não enviada', error); }
   return credential;
 }
 

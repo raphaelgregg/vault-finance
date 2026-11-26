@@ -13,7 +13,8 @@ import {
   getFirestore,
   connectFirestoreEmulator,
 } from 'firebase/firestore';
-import { firebaseConfig, isConfigPlaceholder, USE_EMULATORS, EMULATOR_HOST, resolveMode } from './config.js';
+import { initializeAppCheck, ReCaptchaV3Provider, getToken as getAppCheckTokenSdk } from 'firebase/app-check';
+import { firebaseConfig, isConfigPlaceholder, USE_EMULATORS, EMULATOR_HOST, resolveMode, APP_CHECK_SITE_KEY } from './config.js';
 
 /** Config fictícia: só funciona contra os emuladores locais. */
 const DEMO_CONFIG = Object.freeze({
@@ -44,6 +45,22 @@ export const configMissing = isConfigPlaceholder(firebaseConfig) && !usingDemoCo
 const activeConfig = usingDemoConfig ? DEMO_CONFIG : firebaseConfig;
 
 const app = getApps().length ? getApps()[0] : initializeApp(activeConfig);
+
+// VF-SEC-03: App Check só com chave configurada, fora do modo DEMO/emulador e no navegador. Antes de Auth/Firestore.
+let appCheck = null;
+if (APP_CHECK_SITE_KEY && !usingDemoConfig && typeof window !== 'undefined') {
+  try {
+    appCheck = initializeAppCheck(app, { provider: new ReCaptchaV3Provider(APP_CHECK_SITE_KEY), isTokenAutoRefreshEnabled: true });
+  } catch (error) {
+    console.warn('[app-check] não inicializado', error);
+  }
+}
+
+/** Token do App Check para a API própria (`X-Firebase-AppCheck`); null quando desligado ou indisponível. */
+export async function getAppCheckToken() {
+  if (!appCheck) return null;
+  try { return (await getAppCheckTokenSdk(appCheck, false)).token ?? null; } catch { return null; }
+}
 
 export const auth = getAuth(app);
 export const db = getFirestore(app);

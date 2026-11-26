@@ -6,6 +6,7 @@ import { applyStoredTheme } from './components/theme.js';
 import { configMissing } from './firebase/client.js';
 import { connectEmulatorsOnce } from './firebase/client.js';
 import { signIn, register, resetPassword, authErrorMessage } from './services/auth.js';
+import { validateNewPassword } from './utils/password.js';
 import { redirectIfAuthenticated } from './core/guard.js';
 import { toast } from './components/dom.js';
 import { registerPwa } from './pwa.js';
@@ -74,6 +75,8 @@ forms.register.addEventListener('submit', async (event) => {
   const password = String(data.get('password') ?? '');
   const name = String(data.get('name') ?? '').trim();
   if (!email || !password) return setError('register-error', 'Informe e-mail e senha.');
+  const strength = validateNewPassword(password);
+  if (!strength.ok) return setError('register-error', strength.error);
   setBusy(forms.register, true);
   try {
     await register(email, password, name);
