@@ -5,7 +5,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { validatePasswordChange, hasPasswordProvider, externalProviderLabels, providerIds, MIN_PASSWORD_LENGTH } from '../../js/utils/password.js';
-import { changePassword, sendResetToCurrentUser, authErrorMessage } from '../../js/services/auth.js';
+import { changePassword, sendResetToCurrentUser, sendVerificationToCurrentUser, refreshEmailVerified, authErrorMessage } from '../../js/services/auth.js';
 
 const userWith = (...providers) => ({ email: 'a@b.com', providerData: providers.map((providerId) => ({ providerId })) });
 const pwUser = () => userWith('password');
@@ -103,5 +103,26 @@ describe('e-mail de redefinição e mensagens', () => {
     };
     for (const [code, re] of Object.entries(expected)) assert.match(authErrorMessage({ code }), re, code);
     assert.equal(authErrorMessage({}), 'Falha de autenticação.');
+  });
+});
+
+describe('verificação de e-mail (VF-SEC-06)', () => {
+  it('reenvia o link; já verificado não reenvia; erro vira mensagem', async () => {
+    let sent = 0;
+    const ok = await sendVerificationToCurrentUser({ email: 'a@b.com', emailVerified: false }, { send: async () => { sent += 1; } });
+    assert.deepEqual([ok.ok, ok.email, sent], [true, 'a@b.com', 1]);
+    const already = await sendVerificationToCurrentUser({ email: 'a@b.com', emailVerified: true }, { send: async () => { sent += 1; } });
+    assert.deepEqual([already.ok, already.already, sent], [true, true, 1]);
+    const bad = await sendVerificationToCurrentUser({ email: 'a@b.com' }, { send: async () => { throw fbError('auth/too-many-requests'); } });
+    assert.match(bad.errors._form, /Muitas tentativas/);
+    assert.equal((await sendVerificationToCurrentUser({}, {})).ok, false);
+  });
+  it('"Já verifiquei": recarrega o usuário e renova o token; reflete emailVerified', async () => {
+    const calls = [];
+    const user = { emailVerified: false, reload: async () => { calls.push('reload'); user.emailVerified = true; }, getIdToken: async (force) => { calls.push(`token:${force}`); } };
+    assert.deepEqual(await refreshEmailVerified(user), { ok: true, verified: true });
+    assert.deepEqual(calls, ['reload', 'token:true']);
+    assert.equal((await refreshEmailVerified({ reload: async () => { throw fbError('auth/network-request-failed'); } })).ok, false);
+    assert.deepEqual(await refreshEmailVerified(null), { ok: false, verified: false });
   });
 });

@@ -4,7 +4,7 @@
  */
 import { el, toast, refreshIcons } from '../components/dom.js';
 import { applyThemePreference } from '../components/theme.js';
-import { changePassword, sendResetToCurrentUser } from '../services/auth.js';
+import { changePassword, sendResetToCurrentUser, sendVerificationToCurrentUser, refreshEmailVerified } from '../services/auth.js';
 import { hasPasswordProvider, externalProviderLabels, MIN_PASSWORD_LENGTH } from '../utils/password.js';
 import {
   getProfile,
@@ -117,6 +117,7 @@ export async function render(container, { user }) {
       form,
     ]),
     buildPasswordPanel(user),
+    hasPasswordProvider(user) ? buildEmailVerificationPanel(user) : null,
     // Atalho à manutenção de dados (qualquer usuário autenticado; ações do próprio uid).
     el('section', { class: 'panel' }, [el('div', { class: 'panel__body' }, [
       el('p', { class: 'card__hint', text: 'Ferramentas de dados: apagar meus dados, massa de testes e importação/exportação CSV.' }),
@@ -124,6 +125,49 @@ export async function render(container, { user }) {
     ])])
   );
   refreshIcons();
+}
+
+/**
+ * Segurança — verificação de e-mail (VF-SEC-06): mostra o estado e permite reenviar o link; "Já verifiquei" recarrega
+ * o usuário e renova o token (necessário se o servidor exigir `email_verified`).
+ */
+function buildEmailVerificationPanel(user) {
+  const status = el('p', { class: user.emailVerified ? 'notice' : 'card__hint', id: 'email-verify-status', role: 'status',
+    text: user.emailVerified ? `E-mail verificado: ${user.email}.` : `E-mail ainda não verificado: ${user.email}. Enviamos um link no cadastro; reenvie se não encontrar.` });
+  const sendBtn = el('button', { type: 'button', class: 'btn btn--secondary', id: 'email-verify-send', text: 'Enviar e-mail de verificação' });
+  const doneBtn = el('button', { type: 'button', class: 'btn btn--secondary', id: 'email-verify-done', text: 'Já verifiquei' });
+  sendBtn.addEventListener('click', async () => {
+    sendBtn.disabled = true;
+    try {
+      const r = await sendVerificationToCurrentUser(user);
+      toast(r.ok ? (r.already ? 'Seu e-mail já está verificado.' : `Link enviado para ${r.email}. Verifique a caixa de entrada e o spam.`) : r.errors._form, 6000);
+    } finally {
+      sendBtn.disabled = false;
+    }
+  });
+  doneBtn.addEventListener('click', async () => {
+    doneBtn.disabled = true;
+    try {
+      const r = await refreshEmailVerified(user);
+      if (r.ok && r.verified) {
+        status.className = 'notice';
+        status.textContent = `E-mail verificado: ${user.email}.`;
+        toast('E-mail verificado com sucesso.');
+      } else {
+        toast(r.ok ? 'Ainda não consta como verificado. Abra o link do e-mail e tente de novo.' : r.errors._form, 6000);
+      }
+    } finally {
+      doneBtn.disabled = false;
+    }
+  });
+  const actions = user.emailVerified ? [] : [sendBtn, doneBtn];
+  return el('section', { class: 'panel', id: 'panel-email-verify' }, [
+    el('div', { class: 'panel__header' }, [
+      el('span', { class: 'card__icon' }, [el('i', { 'data-lucide': 'mail-check', 'aria-hidden': 'true' })]),
+      el('div', {}, [el('h2', { text: 'Segurança — e-mail' })]),
+    ]),
+    el('div', { class: 'panel__body' }, [status, ...actions]),
+  ]);
 }
 
 /**

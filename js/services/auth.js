@@ -121,3 +121,33 @@ export async function sendResetToCurrentUser(user, io = {}) {
     return { ok: false, errors: { _form: authErrorMessage(error) } };
   }
 }
+
+/**
+ * Verificação de e-mail (VF-SEC-06): reenvia o link para o e-mail do usuário autenticado. `io.send` injetável.
+ * Retorna { ok, email, errors }; já verificado → { ok: true, already: true }.
+ */
+export async function sendVerificationToCurrentUser(user, io = {}) {
+  if (!user?.email) return { ok: false, errors: { _form: 'Usuário sem e-mail cadastrado.' } };
+  if (user.emailVerified) return { ok: true, already: true, email: user.email };
+  try {
+    await (io.send ?? sendEmailVerification)(user);
+    return { ok: true, email: user.email };
+  } catch (error) {
+    return { ok: false, errors: { _form: authErrorMessage(error) } };
+  }
+}
+
+/**
+ * Depois de clicar no link do e-mail: recarrega o usuário e renova o ID token (a claim `email_verified` só entra no
+ * token novo). Retorna { ok, verified }.
+ */
+export async function refreshEmailVerified(user) {
+  if (!user) return { ok: false, verified: false };
+  try {
+    await user.reload();
+    await user.getIdToken(true);
+    return { ok: true, verified: Boolean(user.emailVerified) };
+  } catch (error) {
+    return { ok: false, verified: false, errors: { _form: authErrorMessage(error) } };
+  }
+}
