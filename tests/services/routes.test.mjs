@@ -38,13 +38,25 @@ describe('rota dedicada de manutenção (VF-2-03u)', () => {
   });
 });
 
+describe('rota do playbook (VF-DOC-01)', () => {
+  it('playbook: página, data-page, rewrite limpo e módulo — fora do menu principal', () => {
+    const page = join(root, 'pages', 'playbook.html');
+    assert.ok(existsSync(page));
+    assert.match(readFileSync(page, 'utf8'), /data-page="playbook"/);
+    assert.equal(vercel.rewrites.find((r) => r.source === '/playbook')?.destination, '/pages/playbook');
+    assert.match(appJs, /\bplaybook: \(\) => import\('\.\/modules\/playbook\.js'\)/);
+    assert.ok(existsSync(join(root, 'js', 'modules', 'playbook.js')));
+    assert.equal(NAV_ITEMS.some((i) => i.id === 'playbook'), false);
+  });
+});
+
 describe('rewrites × cleanUrls (VF-2-03y)', () => {
   it('nenhum destino termina em .html enquanto cleanUrls estiver ligado (a Vercel responde 404)', () => {
     assert.equal(vercel.cleanUrls, true);
     for (const r of vercel.rewrites) assert.doesNotMatch(r.destination, /\.html$/, `${r.source} → ${r.destination}`);
   });
   it('páginas internas não têm scripts inline nem handlers on* (CSP script-src sem unsafe-inline)', () => {
-    const pages = ['index.html', ...NAV_ITEMS.map((i) => `pages/${i.id}.html`), 'pages/manutencao-dados.html'];
+    const pages = ['index.html', ...NAV_ITEMS.map((i) => `pages/${i.id}.html`), 'pages/manutencao-dados.html', 'pages/playbook.html'];
     for (const file of pages) {
       const html = readFileSync(join(root, file), 'utf8');
       assert.doesNotMatch(html, /<script(?![^>]*\ssrc=)[^>]*>\s*\S/, `${file}: script inline`);

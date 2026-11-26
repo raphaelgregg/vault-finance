@@ -319,6 +319,10 @@ O projeto não habilita nada fora do Spark e não faz chamadas pagas.
 
 ---
 
+## 7.5 Playbook de manutenção
+
+Guia para quem mantém o sistema, em `docs/playbook/` (Markdown): arquitetura, operação e deploy, segurança, testes, runbooks e uma ficha por funcionalidade, mais uma **referência gerada do código**. Administradores o leem na página `/playbook` (busca, filtros e sumário; link em *Configurações*), servida por `GET /api/docs`. É atualizado automaticamente: `npm run docs:build` regenera, os testes bloqueiam defasagem e a Action `playbook.yml` comita a parte gerada na `claude-dev`. Detalhes dentro do próprio playbook, em "Atualização automática".
+
 ## 8. Limitações e pendências
 
 - **Config real do Firebase** precisa estar em `js/firebase/config.js`; as Rules/índices do repositório

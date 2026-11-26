@@ -5,6 +5,7 @@
 import { el, toast, refreshIcons } from '../components/dom.js';
 import { applyThemePreference } from '../components/theme.js';
 import { changePassword, sendResetToCurrentUser, sendVerificationToCurrentUser, refreshEmailVerified } from '../services/auth.js';
+import { isAdminUser } from '../services/maintenance.js';
 import { hasPasswordProvider, externalProviderLabels, MIN_PASSWORD_LENGTH } from '../utils/password.js';
 import {
   getProfile,
@@ -33,6 +34,8 @@ export async function render(container, { user }) {
     console.error('[configuracoes] falha ao carregar preferências', error);
     loadError = true;
   }
+
+  const admin = await isAdminUser(user, { refresh: false }).catch(() => false); // atalho do playbook (a barreira real é o servidor)
 
   const nameInput = el('input', {
     type: 'text',
@@ -122,6 +125,7 @@ export async function render(container, { user }) {
     el('section', { class: 'panel' }, [el('div', { class: 'panel__body' }, [
       el('p', { class: 'card__hint', text: 'Ferramentas de dados: apagar meus dados, massa de testes e importação/exportação CSV.' }),
       el('a', { class: 'btn btn--secondary', href: 'manutencao-dados.html', id: 'link-manutencao', text: 'Abrir manutenção de dados' }),
+      admin ? el('a', { class: 'btn btn--secondary', href: 'playbook.html', id: 'link-playbook', text: 'Abrir playbook (administradores)' }) : null,
     ])])
   );
   refreshIcons();

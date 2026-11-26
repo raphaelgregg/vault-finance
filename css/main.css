@@ -6,6 +6,7 @@
 @import url("layout.css");
 @import url("components.css");
 @import url("identity.css");
+@import url("playbook.css");
 
 /* Ajustes globais que não pertencem a um componente específico */
 html {

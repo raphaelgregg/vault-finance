@@ -37,6 +37,13 @@ export function startServer({ port = 5500, host = '127.0.0.1', handleFinance } =
       res.end(JSON.stringify(result.body));
       return;
     }
+    if (pathname === '/api/docs') { // Playbook (VF-DOC-01): só administradores
+      const { handleDocs } = await import('../server/docs/playbook.mjs');
+      const result = await handleDocs({ method: req.method, headers: req.headers });
+      res.writeHead(result.status, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+      res.end(JSON.stringify(result.body));
+      return;
+    }
     const path = normalize(decodeURIComponent(pathname));
     const rewritten = path === '/' || path === '\\' ? 'index.html' : path;
     let file = join(root, rewritten);

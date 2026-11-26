@@ -199,7 +199,8 @@ const parseClaims = (user) => {
   try { return JSON.parse(user?.customAttributes || '{}') ?? {}; } catch { return {}; }
 };
 
-async function authorizeAdmin(request, { env, fetch, now }) {
+/** Exportada para outros endpoints só de administrador (ex.: `/api/docs`). */
+export async function authorizeAdmin(request, { env, fetch, now }) {
   const auth = String(request.headers?.authorization ?? request.headers?.Authorization ?? '');
   const idToken = /^Bearer\s+(\S+)$/i.exec(auth)?.[1];
   if (!idToken) return { response: reject(401, 'missing_token', 'Envie o ID token no cabeçalho Authorization: Bearer.', { step: 'bearer' }) };

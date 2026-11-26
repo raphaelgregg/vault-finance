@@ -1,0 +1,1588 @@
+{
+ "version": 1,
+ "docs": [
+  {
+   "id": "comecar-aqui",
+   "title": "Comece aqui",
+   "category": "Começar aqui",
+   "tags": [
+    "início",
+    "mapa",
+    "glossário",
+    "convenções",
+    "índice"
+   ],
+   "summary": "Como usar este playbook, mapa rápido \"quero mexer em X → vá para Y\", glossário e regras de ouro do projeto.",
+   "files": [
+    "CLAUDE.md",
+    "PLAN.md",
+    "README.md",
+    "docs/ARCHITECTURE.md"
+   ],
+   "page": "",
+   "file": "docs/playbook/00-comecar-aqui.md",
+   "sections": [
+    {
+     "id": "resumo",
+     "heading": "Resumo",
+     "level": 2,
+     "md": "O **Vault Finance** é um controle financeiro pessoal: HTML5 + CSS3 + JavaScript ES Modules **puros** (sem framework e sem build), com **Firebase Authentication** (e-mail/senha) e **Cloud Firestore** no navegador. As operações que mexem em saldo passam por funções de servidor na **Vercel** (Firebase Admin SDK). O app é uma PWA hospedada como site estático na Vercel."
+    },
+    {
+     "id": "como-usar-este-playbook",
+     "heading": "Como usar este playbook",
+     "level": 2,
+     "md": "- **Buscar:** use a caixa de busca (atalho `/`). Ela procura em todas as seções, sem diferenciar maiúsculas nem acentos, e todos os termos precisam aparecer. Dá para filtrar por categoria e por tag.\n- **Navegar:** o sumário à esquerda agrupa por categoria. Cada seção tem link próprio (`#doc/<documento>/<seção>`), então dá para compartilhar o endereço exato.\n- **Confiança:** cada ficha cita arquivos (`arquivo:linha`). Se uma linha mudou, o arquivo continua certo e a linha pode ter se deslocado. A seção [Referência gerada](doc:referencia-gerada) é extraída do código e é a fonte para rotas, coleções, campos das Rules, operações do servidor e variáveis de ambiente.\n- **Atualização:** o playbook se mantém sozinho. Veja [Atualização automática](doc:atualizacao-automatica)."
+    },
+    {
+     "id": "quero-mexer-em-va-para",
+     "heading": "Quero mexer em… → vá para",
+     "level": 2,
+     "md": "| Quero… | Leia |\n|---|---|\n| entender as camadas e o fluxo de uma requisição | [Arquitetura](doc:arquitetura) |\n| publicar uma mudança, regras do Firestore, variáveis na Vercel | [Operação e deploy](doc:operacao-deploy) |\n| entender o que protege os dados e por quê | [Segurança](doc:seguranca) |\n| rodar ou escrever testes | [Testes](doc:testes) |\n| resolver um problema (500, cota, acesso admin…) | [Runbooks](doc:runbooks) |\n| mexer em receitas, despesas ou transferências | [Receitas](doc:receitas), [Despesas](doc:despesas), [Transferências](doc:transferencias) |\n| mexer em contas e saldos | [Bancos e contas](doc:bancos), [Núcleo financeiro](doc:nucleo-financeiro) |\n| cartões e faturas | [Cartões](doc:cartoes) |\n| devedores e parcelas | [Devedores](doc:devedores) |\n| login, senha, e-mail verificado | [Autenticação](doc:autenticacao), [Configurações](doc:configuracoes) |\n| administradores, Central de validação, limpeza de dados | [Administração](doc:administracao), [Manutenção de dados](doc:manutencao-dados) |\n| adicionar uma página, coleção ou operação nova | [Runbooks](doc:runbooks#adicionar-uma-pagina-nova) |"
+    },
+    {
+     "id": "regras-de-ouro",
+     "heading": "Regras de ouro",
+     "level": 2,
+     "md": "1. **Dinheiro em centavos inteiros.** Nunca `float`. Conversões só em `js/utils/money.js`.\n2. **Saldo nunca é gravado.** É derivado das movimentações (`accountBalances`). Detalhes em [Núcleo financeiro](doc:nucleo-financeiro).\n3. **Quem altera saldo é o servidor.** O navegador pede; o servidor valida, trava e grava (`/api/finance`). As Rules do Firestore **negam** a escrita direta de movimentos liquidados.\n4. **Rules com schemas fechados.** Todo campo novo precisa entrar em `js/core/model/schemas.js`, em `firestore.rules` e em um teste de `tests/rules/`.\n5. **`auditLog` é create-only.** Correção de lançamento liquidado é **estorno** (lançamento compensatório), nunca edição.\n6. **Sem dependências novas** (inclusive bibliotecas por CDN) sem aprovação. O projeto não tem build.\n7. **Segredos nunca no navegador.** A service account vive só em `FIREBASE_SERVICE_ACCOUNT` na Vercel.\n8. **Branch de trabalho: `claude-dev`.** Qualquer ação em outras branches exige autorização explícita (ver `CLAUDE.md` §8).\n9. **Valide em preview antes de produção**, principalmente mudanças de dependências do servidor (lição do `ERR_REQUIRE_ESM`, ver [Runbooks](doc:runbooks))."
+    },
+    {
+     "id": "glossario",
+     "heading": "Glossário",
+     "level": 2,
+     "md": "| Termo | Significado |\n|---|---|\n| **Movimento liquidado** | Receita `received`, despesa `paid`, transferência `confirmed`, recebimento de devedor, aporte/resgate de meta, fatura `paid`. Só estes mudam saldo. |\n| **Operação (op)** | Chamada ao servidor: `POST /api/finance` com `{ op, operationId, params }`. Lista completa em [Referência gerada](doc:referencia-gerada). |\n| **`operationId`** | Chave de idempotência: repetir a mesma chave devolve o resultado guardado; reusar com outros parâmetros dá 409. |\n| **Estorno** | Lançamento compensatório em `reversals`; o original é preservado. |\n| **Claim `admin`** | Atributo do token de autenticação (`customAttributes`), definido só pelo servidor. Libera `/api/docs`, `/api/validation`, `/api/admin-claims` e a limpeza global. |\n| **`ledgerSeq`** | Contador da conta incrementado em toda operação que altera saldo; serializa transações concorrentes. |\n| **Fase / VF-xxx** | Identificadores das tarefas no `PLAN.md` (ex.: `VF-SEC-01`). |\n| **Spark** | Plano gratuito do Firebase: cota diária do Firestore (50 mil leituras, 20 mil escritas, 20 mil exclusões). |\n| **Preview** | Deploy automático de uma branch na Vercel, com URL própria. |"
+    },
+    {
+     "id": "onde-esta-o-resto-da-documentacao",
+     "heading": "Onde está o resto da documentação",
+     "level": 2,
+     "md": "- `README.md`: instalação, configuração do Firebase, modelo de dados, decisões e limitações.\n- `docs/ARCHITECTURE.md`: camadas e regras de dependência.\n- `PLAN.md`: estado operacional, histórico e tarefas (`VF-*`). É a memória do projeto: consulte antes de decidir algo e registre ali o que mudar.\n- `CLAUDE.md`: regras permanentes de trabalho (leitura, arquitetura, Git, validação)."
+    }
+   ]
+  },
+  {
+   "id": "arquitetura",
+   "title": "Arquitetura",
+   "category": "Começar aqui",
+   "tags": [
+    "arquitetura",
+    "camadas",
+    "fluxo",
+    "firebase",
+    "vercel",
+    "pwa"
+   ],
+   "summary": "Camadas, regra de dependência, os dois caminhos de escrita (direto no Firestore × servidor), como uma página é montada e padrões de código.",
+   "files": [
+    "docs/ARCHITECTURE.md",
+    "js/app.js",
+    "js/services/firestore.js",
+    "js/services/financeApi.js",
+    "server/finance/core.mjs"
+   ],
+   "page": "",
+   "file": "docs/playbook/10-arquitetura.md",
+   "sections": [
+    {
+     "id": "resumo",
+     "heading": "Resumo",
+     "level": 2,
+     "md": "O detalhe completo das camadas está em `docs/ARCHITECTURE.md`. Aqui ficam o que é necessário para **dar manutenção**: os fluxos reais, os padrões e as armadilhas."
+    },
+    {
+     "id": "camadas-e-dependencia",
+     "heading": "Camadas e dependência",
+     "level": 2,
+     "md": "```\npages/*.html ──► js/app.js ──► js/modules/*  ──► js/services/* ──► js/firebase/*\n                                   │                 │\n                                   ▼                 ▼\n                           js/components/*     js/core/* (puro)  ──►  js/utils/* (puro)\n```\n\nUma camada só importa as da direita/abaixo. `core` e `utils` não conhecem DOM, rede nem Firebase. Os testes de `tests/model` e `tests/services` dependem disso para rodar em Node puro."
+    },
+    {
+     "id": "dois-caminhos-de-escrita",
+     "heading": "Dois caminhos de escrita",
+     "level": 2,
+     "md": "Toda gravação segue **um** de dois caminhos. Saber qual é qual evita a maior parte dos bugs.\n\n| | Caminho A — direto no Firestore | Caminho B — servidor (`/api/finance`) |\n|---|---|---|\n| Para quê | Cadastros e rascunhos: categorias, contas (dados), orçamentos, metas (dados), assinaturas, cartões, devedores (dados), itens **pendentes** | O que **altera saldo**: liquidar, pagar, receber, transferir, estornar, aportar, ajustar abertura, excluir/arquivar conta e devedor, limpar dados |\n| Quem valida | Security Rules (`firestore.rules`) + validação do modelo no cliente | O servidor (Admin SDK), dentro de uma **transação** |\n| Idempotência | Não | Sim, por `operationId` |\n| Serviço | `js/services/<x>.js` → `js/services/firestore.js` | `js/services/<x>.js` → `js/services/financeApi.js` → `api/finance.mjs` → `server/finance/` |\n| Auditoria | Cliente grava em `auditLog` (create-only) | Servidor grava em `auditLog` na mesma transação |\n\nAs Rules **recusam** no caminho A tudo que o caminho B faz: por exemplo, `status` `received`/`paid`/`confirmed` em receitas, despesas e transferências, e a criação de `debtPayments`, `goalTransactions`, `reversals`, `operations` e `batches`. Isso garante que o navegador nunca vire fonte de verdade do saldo."
+    },
+    {
+     "id": "como-uma-pagina-e-montada",
+     "heading": "Como uma página é montada",
+     "level": 2,
+     "md": "1. `pages/<x>.html` é uma casca: `<body data-page=\"<x>\">`, `#sidebar`, `#topbar`, `#page-content` e os scripts (`importmap.js`, `app.js`).\n2. `js/app.js` aplica o tema, conecta os emuladores (só em `localhost`), chama `requireSession()` (`js/core/guard.js`), monta sidebar, topbar e navegação móvel, e então importa **dinamicamente** o módulo da página pelo mapa `MODULES` (`js/app.js`).\n3. O módulo exporta `render(container, { user })` e cuida de estado, renderização e eventos.\n4. Nenhum módulo é importado antes da autenticação.\n\n`vercel.json` serve as URLs limpas (`/despesas` → `/pages/despesas`). O teste `tests/services/routes.test.mjs` mantém menu, página, rewrite e módulo em sincronia."
+    },
+    {
+     "id": "padroes-que-se-repetem",
+     "heading": "Padrões que se repetem",
+     "level": 2,
+     "md": "- **Service com `io` injetável.** Funções recebem `io`/`deps` opcionais para trocar `create`, `update`, `writeAudit`, `fetch` etc. por falsos nos testes. Mantenha o padrão ao criar services.\n- **`createAudited` / `updateAudited` / `removeAudited`** (`js/services/firestore.js`): operação + entrada de auditoria. A auditoria nunca lança: falha de auditoria não desfaz a operação.\n- **`commitAtomic`** (`js/services/firestore.js:264`): lote atômico no cliente (operação + auditorias). **Não é transação**: não lê dentro do lote. Por isso o que depende de saldo vai ao servidor.\n- **Dinheiro e datas:** `js/utils/money.js` converte \"1.234,56\" ↔ centavos; datas no modelo são texto ISO `AAAA-MM-DD` e viram `Timestamp` só em `toFirestoreData` (`js/services/firestore.js:36`). O servidor usa o mesmo formato (meio-dia UTC).\n- **DOM sem `innerHTML` com dado de usuário.** Use `el()` (`js/components/dom.js`); a opção `html:` é só para ícones literais.\n- **Tabelas:** `js/components/table-tools.js` dá ordenação por cabeçalho e filtro a toda `table.table`.\n- **Paginação por cursor:** `js/services/pager.js`."
+    },
+    {
+     "id": "estado-e-dados-derivados",
+     "heading": "Estado e dados derivados",
+     "level": 2,
+     "md": "Nada é gravado se pode ser calculado: saldo de conta, limite usado do cartão, total de fatura aberta, pendente do devedor, valor guardado de meta, gasto de orçamento, previsão do mês. Veja [Núcleo financeiro](doc:nucleo-financeiro)."
+    },
+    {
+     "id": "limites-de-leitura-cota-do-spark",
+     "heading": "Limites de leitura (cota do Spark)",
+     "level": 2,
+     "md": "Os services de leitura têm tetos (`READ_LIMIT` = 1000 por coleção em `js/services/balances.js`; `REPORT_READ_LIMIT` = 2000 em `js/services/reports.js`; `HISTORY_LIMIT` = 5000 por consulta no servidor em `server/finance/core.mjs`). Se uma coleção bate no teto, o resultado vem com `truncated` e a interface avisa que pode estar incompleto. **Acima do teto no servidor a operação recusa** (nunca devolve saldo incompleto)."
+    },
+    {
+     "id": "pwa",
+     "heading": "PWA",
+     "level": 2,
+     "md": "`manifest.webmanifest` + `sw.js` (service worker mínimo, **sem cache**: dados financeiros nunca ficam defasados). Registrado em `js/pwa.js`."
+    },
+    {
+     "id": "armadilhas-conhecidas",
+     "heading": "Armadilhas conhecidas",
+     "level": 2,
+     "md": "- Importar algo do `server/` que carregue módulos só-ESM pode quebrar na Vercel (`ERR_REQUIRE_ESM`), mesmo funcionando local. Veja [Runbooks](doc:runbooks#atualizar-o-firebase-admin).\n- `exists()` nas Rules **não enxerga** documentos do mesmo lote: parcelas de cartão e faturas novas vão em dois lotes (`js/services/creditCards.js`).\n- `cleanUrls: true`: destino de `rewrite` nunca termina em `.html`.\n- Não existe script de build: um arquivo novo entra em produção como está."
+    }
+   ]
+  },
+  {
+   "id": "operacao-deploy",
+   "title": "Operação e deploy",
+   "category": "Operação",
+   "tags": [
+    "deploy",
+    "vercel",
+    "firebase",
+    "ambiente",
+    "variáveis",
+    "branches",
+    "ci",
+    "firewall"
+   ],
+   "summary": "Ambientes, branches, o que cada arquivo de configuração faz, variáveis de ambiente, ajustes no console do Firebase/Google Cloud e checklist pós-deploy.",
+   "files": [
+    "vercel.json",
+    ".vercelignore",
+    "firebase.json",
+    ".firebaserc",
+    "firestore.rules",
+    "firestore.indexes.json",
+    ".github/workflows/ci.yml",
+    ".github/workflows/playbook.yml",
+    "api/finance.mjs",
+    "api/validation.mjs",
+    "api/admin-claims.mjs",
+    "api/docs.mjs"
+   ],
+   "page": "",
+   "file": "docs/playbook/20-operacao-deploy.md",
+   "sections": [
+    {
+     "id": "ambientes-e-branches",
+     "heading": "Ambientes e branches",
+     "level": 2,
+     "md": "| Ambiente | Origem | Observações |\n|---|---|---|\n| **Produção** | branch `main` | Domínios do projeto Vercel `my-vault`: `vault.rgregg.com.br` e `my-vault-one.vercel.app`. Todo push na `main` dispara deploy. |\n| **Preview** | qualquer outra branch | URL `my-vault-git-<branch>-raphaelgreggs-projects.vercel.app`. Use para validar antes de produção. |\n| **Local** | `npm run serve` ou `npm run serve:api` | `localhost` conecta nos **emuladores** (Auth 9099, Firestore 8080) quando a página roda em `localhost`/`127.0.0.1`. |\n\n**Fluxo de trabalho:** só se trabalha na `claude-dev`. `main` e `development` recebem a `claude-dev` por **fast-forward** (sem force push), e **só com autorização explícita** (`CLAUDE.md` §8). Depois de qualquer push na `main`, teste em produção: login, uma receita, uma despesa e uma transferência.\n\nProjeto Firebase: `vault-finance-d1603` (plano **Spark**, região `nam5`), definido em `.firebaserc` e `js/firebase/config.js`. A chave web (`apiKey`) é pública por design; a proteção real são as Rules e o Authentication."
+    },
+    {
+     "id": "o-que-cada-arquivo-de-configuracao-faz",
+     "heading": "O que cada arquivo de configuração faz",
+     "level": 2,
+     "md": "| Arquivo | Função |\n|---|---|\n| `vercel.json` | Headers de segurança e CSP, rewrites das URLs limpas, `redirects` que bloqueiam `/server`, `/tests`, `/docs` e `/scripts` como estáticos, e configuração das funções (`maxDuration`, `includeFiles`). |\n| `.vercelignore` | Arquivos que **nem sobem** para a Vercel (PLAN, CLAUDE, README, tests, scripts, `.github`, Rules, `firebase.json`…). **Não ignore** `server/`, `api/`, `js/` nem `package*.json`: as funções importam deles. `docs/` sobe de propósito, só para `/api/docs` ler `docs/playbook/index.json`. |\n| `firebase.json` | Só emuladores e referência a Rules/índices. Não há bloco `hosting`: a hospedagem é da Vercel. |\n| `firestore.rules` | Security Rules. **Alterar exige teste em `tests/rules/` e publicação manual** (ver abaixo). |\n| `firestore.indexes.json` | Índices compostos. Consulta nova com filtro + ordenação costuma exigir índice. |\n| `package.json` | Scripts, dependências e `engines.node >= 24`. A única dependência de produção é `firebase-admin` (usada em `server/`). |"
+    },
+    {
+     "id": "vercel-json-em-detalhe",
+     "heading": "vercel.json em detalhe",
+     "level": 3,
+     "md": "- **Funções** (`api/*.mjs`): `finance` 30 s; `validation` 60 s; `docs` 10 s com `includeFiles: docs/playbook/index.json`.\n- **Rewrites** `/<página>` → `/pages/<página>` (sem `.html`), incluindo `/manutencao-dados` e `/playbook`.\n- **Redirects** (302): `/(server|tests|docs|scripts)/:path*` → `/`. Redirects vêm antes do sistema de arquivos, então esses diretórios nunca saem como estáticos.\n- **Headers** em tudo: `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, `X-Frame-Options: DENY` e **Content-Security-Policy**. O hash `sha256` do `script-src` é do import map injetado por `js/importmap.js`; **muda sempre que o import map muda**. O teste `tests/services/security-headers.test.mjs` falha se estiver fora de sincronia."
+    },
+    {
+     "id": "variaveis-de-ambiente-vercel",
+     "heading": "Variáveis de ambiente (Vercel)",
+     "level": 2,
+     "md": "A lista completa e atual, com os arquivos que leem cada uma, está em [Referência gerada](doc:referencia-gerada). Resumo do significado:\n\n| Variável | Para quê | Obrigatória |\n|---|---|---|\n| `FIREBASE_SERVICE_ACCOUNT` | JSON (ou base64) da service account do Admin SDK. Dá acesso ao Firestore **e** ao Authentication. | **Sim** |\n| `FIREBASE_PROJECT_ID` | Sobrescreve o projeto (padrão `vault-finance-d1603`). | Não |\n| `GCLOUD_PROJECT` | Fallback do projeto no Admin SDK. | Não |\n| `REQUIRE_VERIFIED_EMAIL` | `true` exige e-mail verificado nas operações de `/api/finance` e `/api/validation` (403 `EMAIL_NOT_VERIFIED`). Desligado por padrão. | Não |\n| `APPCHECK_ENFORCE` | `true` exige o cabeçalho `X-Firebase-AppCheck`. **App Check está desligado por decisão** (ver [Segurança](doc:seguranca)). | Não |\n| `VERCEL_ENV` | Definida pela Vercel (`production`, `preview`, `development`). Usada pelo guarda de emulador. | Automática |\n| `FIREBASE_AUTH_EMULATOR_HOST`, `FIRESTORE_EMULATOR_HOST` | **Só em desenvolvimento/testes.** Com elas, o Admin SDK aceita tokens **sem assinatura**; por isso o servidor **recusa** qualquer uma delas em `production`/`preview` (`server/env-guard.mjs`). **Nunca crie na Vercel.** | Não |\n| `PORT` | Porta do servidor local `scripts/dev-server.mjs`. | Não |\n\nPara mudar uma variável: Vercel → projeto → *Settings → Environment Variables*, e **refaça o deploy** (variáveis só valem em deploys novos)."
+    },
+    {
+     "id": "publicar-as-security-rules",
+     "heading": "Publicar as Security Rules",
+     "level": 2,
+     "md": "Quando `firestore.rules` mudar:\n\n```bash\nnpm run test:rules\n```\n```bash\nnpx firebase deploy --only firestore:rules --project vault-finance-d1603\n```\n\nRequer `firebase login` na máquina. Alternativa: console do Firebase → *Firestore → Regras* → colar o arquivo → *Publicar*. O console guarda histórico e permite voltar a versão anterior. O deploy publica o **arquivo inteiro**. Índices: `--only firestore:indexes`. Só publique com autorização (`CLAUDE.md`)."
+    },
+    {
+     "id": "configuracoes-feitas-no-console-fora-do-codigo",
+     "heading": "Configurações feitas no console (fora do código)",
+     "level": 2,
+     "md": "Estas **não estão no repositório**; se o projeto for recriado, refaça:\n\n- **Authentication → Settings → Ações do usuário:** *Email enumeration protection* ativa.\n- **Authentication → Settings → Política de senha:** mínimo 10, sem exigir classes de caractere, modo **\"Exigir a aplicação\"** (quem tem senha curta só entra após redefinir por e-mail).\n- **Google Cloud → APIs e serviços → Credenciais → chave de navegador:** restrição por **referenciadores HTTP** (domínios de produção, previews usados, `localhost:5500` e `vault-finance-d1603.firebaseapp.com`) e por **API** (Cloud Firestore, Identity Toolkit, Token Service).\n- **Vercel → Firewall:** regra \"Limite da API\": caminho começa com `/api/`, janela fixa de 60 s, **30 requisições por IP**, resposta 429.\n- **Contas administradoras:** a claim `admin` é concedida pelo próprio app (ver [Administração](doc:administracao)); o primeiro administrador precisa ser definido fora do app (console ou Admin SDK)."
+    },
+    {
+     "id": "ci-e-automacoes-github-actions",
+     "heading": "CI e automações (GitHub Actions)",
+     "level": 2,
+     "md": "- `ci.yml` — **CI:** em push nas branches `claude-dev` e `main` e em pull requests: `npm audit --omit=dev --audit-level=high`, lint e testes unitários em Node 24 e 26; Rules e integração no emulador (Java 17). Não roda E2E (precisa de navegador).\n- `playbook.yml` — **Playbook:** regenera `docs/playbook/` e comita na `claude-dev` quando o código muda (ver [Atualização automática](doc:atualizacao-automatica))."
+    },
+    {
+     "id": "checklist-pos-deploy-producao",
+     "heading": "Checklist pós-deploy (produção)",
+     "level": 2,
+     "md": "1. O deploy ficou \"Ready\" na Vercel (build e funções sem erro).\n2. Entre em `vault.rgregg.com.br` e crie **uma receita, uma despesa e uma transferência**.\n3. Console do navegador sem erros de CSP; ícones carregam (o `lucide` é local em `assets/vendor/`).\n4. `/PLAN.md`, `/firestore.rules` e `/server/admin/claims.mjs` **não** devolvem conteúdo.\n5. `/playbook` abre para o administrador e a busca responde.\n6. Se mexeu em Rules ou índices: conferir no console que foram publicados."
+    },
+    {
+     "id": "cotas-do-spark-e-monitoramento",
+     "heading": "Cotas do Spark e monitoramento",
+     "level": 2,
+     "md": "- Firestore: **50 mil leituras/dia, 20 mil escritas/dia, 20 mil exclusões/dia**. Uma operação financeira lê muitos documentos; o rate limit reduz o risco, mas não elimina.\n- Acompanhe *Firebase → Firestore → Uso*. Leituras altas sem você estar usando é sinal de abuso: reavalie App Check e o limite do Firewall.\n- Logs de função na Vercel: o plano **Hobby retém 1 hora**. Colete o erro logo depois de reproduzir."
+    }
+   ]
+  },
+  {
+   "id": "atualizacao-automatica",
+   "title": "Atualização automática",
+   "category": "Operação",
+   "tags": [
+    "playbook",
+    "documentação",
+    "automação",
+    "gerador",
+    "ci",
+    "github-actions"
+   ],
+   "summary": "Como o playbook se mantém em dia sozinho (gerador, testes que bloqueiam defasagem, GitHub Action), como escrever fichas e como o acesso admin funciona.",
+   "files": [
+    "scripts/gen-playbook.mjs",
+    "docs/playbook/index.json",
+    "docs/playbook/referencia-gerada.md",
+    ".github/workflows/playbook.yml",
+    "api/docs.mjs",
+    "server/docs/playbook.mjs",
+    "js/modules/playbook.js",
+    "js/utils/markdown.js",
+    "js/utils/playbookSearch.js",
+    "tests/services/playbook.test.mjs"
+   ],
+   "page": "",
+   "file": "docs/playbook/60-atualizacao-automatica.md",
+   "sections": [
+    {
+     "id": "resumo",
+     "heading": "Resumo",
+     "level": 2,
+     "md": "O playbook tem **duas camadas** e **três mecanismos** que impedem que ele envelheça."
+    },
+    {
+     "id": "as-duas-camadas",
+     "heading": "As duas camadas",
+     "level": 2,
+     "md": "| Camada | Onde | Quem mantém |\n|---|---|---|\n| **Fichas escritas** (arquitetura, operação, segurança, funcionalidades, runbooks) | `docs/playbook/*.md` e `docs/playbook/funcionalidades/*.md` | Pessoas. Explicam o **porquê** e o **como**. |\n| **Referência gerada** (rotas, coleções e campos das Rules, operações do servidor, variáveis de ambiente, scripts, dependências, testes, CSP, tarefas do PLAN) | `docs/playbook/referencia-gerada.md` | **O código.** Nunca edite à mão. |\n\nOs dois viram um único arquivo, `docs/playbook/index.json`, que a página consome."
+    },
+    {
+     "id": "os-tres-mecanismos",
+     "heading": "Os três mecanismos",
+     "level": 2,
+     "md": "1. **Gerador** (`scripts/gen-playbook.mjs`): lê o código (páginas, `vercel.json`, `firestore.rules`, o **registro real** de operações do servidor, `process.env`, `package.json`, `PLAN.md`…) e produz a referência e o índice de forma **determinística** (sem datas nem hashes de commit). Rode `npm run docs:build`. `npm run docs:check` só confere, sem gravar.\n2. **Testes que bloqueiam defasagem** (`tests/services/playbook.test.mjs`, parte de `npm run test:unit`, logo do CI):\n   - o `index.json` e a `referencia-gerada.md` no disco precisam ser **idênticos** ao que o código gera agora;\n   - **toda página** do app precisa ter uma ficha (`page: <id>` no front matter);\n   - toda **coleção** do Firestore, **operação** do servidor, **variável de ambiente**, **função de `api/`** e **workflow** precisa ser mencionada em alguma ficha;\n   - todo link interno `doc:<id>#<seção>` precisa resolver.\n   Ou seja: criou uma página, coleção, operação ou variável nova sem documentar? **O teste falha.**\n3. **GitHub Action** (`.github/workflows/playbook.yml`): em **todo push na `claude-dev`**, roda o gerador e, se algo mudou, **comita o resultado na mesma branch** (`docs(playbook): …`). Assim a referência acompanha o código sem ninguém lembrar. Se você trabalha na `claude-dev`, faça `git pull --ff-only` antes de seu próximo push, para pegar o commit do bot.\n\n> A Action só atualiza a parte **gerada**. O texto das fichas continua dependendo de pessoas; os testes acima garantem que ninguém esqueça de **criar** a ficha, e o fluxo de revisão cuida de mantê-la certa."
+    },
+    {
+     "id": "como-o-acesso-admin-funciona",
+     "heading": "Como o acesso admin funciona",
+     "level": 2,
+     "md": "- A página `/playbook` (`js/modules/playbook.js`) só aparece para quem tem a claim `admin`; o link fica em *Configurações* para administradores.\n- Os dados vêm de `GET /api/docs` (`api/docs.mjs` → `server/docs/playbook.mjs`), que usa **a mesma autorização** de `/api/admin-claims` (token verificado + claim `admin` **atual** no Auth). Sem ser admin: 403.\n- `docs/` **não é servido como arquivo estático** (`vercel.json` redireciona `/docs/*`), mas **sobe** no deploy para a função ler o `docs/playbook/index.json` (`includeFiles`). Por isso o conteúdo não fica público."
+    },
+    {
+     "id": "escrever-ou-editar-uma-ficha",
+     "heading": "Escrever ou editar uma ficha",
+     "level": 2,
+     "md": "Cada `.md` começa com um bloco de **front matter**:\n\n```markdown\n---\ntitle: Receitas\ncategory: Funcionalidades\ntags: receitas, saldo, estorno\nsummary: Uma linha que aparece no cartão da home e na busca por filtro.\nfiles: js/modules/receitas.js, js/services/incomes.js\npage: receitas\n---\n```\n\n| Campo | Obrigatório | Significado |\n|---|---|---|\n| `title` | sim | Título na página e na busca |\n| `category` | sim | `Começar aqui`, `Operação`, `Segurança`, `Funcionalidades`, `Testes`, `Runbooks` ou `Referência` (define a ordem do sumário) |\n| `tags` | não | Lista separada por vírgula; filtros e busca |\n| `summary` | recomendado | Resumo curto |\n| `files` | recomendado | Arquivos relacionados; também são pesquisáveis |\n| `page` | em fichas de página | Id da página (`pages/<id>.html`); o teste exige uma ficha por página |\n\nRegras de escrita:\n\n- `# Título` (nível 1) uma vez; seções em `##` e `###`. **Cada seção é uma unidade de busca e tem link próprio** (o id é o título sem acentos, em minúsculas e com hífens).\n- Link interno: `[texto](doc:<id-do-documento>)` ou `[texto](doc:<id>#<seção>)`. O `<id>` é o nome do arquivo sem o prefixo numérico (`50-runbooks.md` → `runbooks`).\n- Suportado: títulos, parágrafos, listas (com aninhamento), tabelas, blocos de código, citações, `código`, **negrito**, *itálico* e links `http(s)`. **HTML cru não é interpretado** (a página nunca usa `innerHTML`).\n- Cite arquivos como `arquivo:linha` e marque o que **não foi verificado**.\n- Termine com `npm run docs:build` e comite junto da mudança de código."
+    },
+    {
+     "id": "arquivos-do-mecanismo",
+     "heading": "Arquivos do mecanismo",
+     "level": 2,
+     "md": "| Arquivo | Papel |\n|---|---|\n| `scripts/gen-playbook.mjs` | Gerador e verificador |\n| `js/utils/markdown.js` | Parser de Markdown puro e seguro (tokens, não HTML) |\n| `js/utils/playbookSearch.js` | Busca: sem acentos, AND entre termos, pontuação por título/tags/arquivos/corpo, realce |\n| `js/services/playbook.js` | Cliente de `/api/docs` |\n| `js/modules/playbook.js` | A página: busca, filtros, sumário, navegação por hash, atalho `/` |\n| `css/playbook.css` | Estilos (tema claro/escuro) |\n| `server/docs/playbook.mjs`, `api/docs.mjs` | Endpoint só de administrador |"
+    },
+    {
+     "id": "solucao-de-problemas",
+     "heading": "Solução de problemas",
+     "level": 2,
+     "md": "- **A página diz \"Playbook indisponível\":** o deploy não incluiu `docs/playbook/index.json`. Confirme que ele está no commit e que `vercel.json` tem `includeFiles` para `api/docs.mjs`; refaça o deploy.\n- **403 ao abrir:** a conta não é administradora, ou a claim ainda não está no token (saia e entre de novo).\n- **O CI acusa \"Playbook defasado\":** `npm run docs:build`, revise o `git diff docs/playbook/` e comite.\n- **A busca não acha algo que existe:** a busca exige **todos** os termos; use menos termos ou remova filtros."
+    }
+   ]
+  },
+  {
+   "id": "seguranca",
+   "title": "Segurança",
+   "category": "Segurança",
+   "tags": [
+    "segurança",
+    "rules",
+    "autenticação",
+    "admin",
+    "csp",
+    "tokens",
+    "firewall",
+    "auditoria"
+   ],
+   "summary": "Modelo de ameaças, as camadas de proteção, como cada endpoint autentica, decisões VF-SEC-01…09, riscos aceitos e o que monitorar.",
+   "files": [
+    "firestore.rules",
+    "server/finance/core.mjs",
+    "server/admin/claims.mjs",
+    "server/validation/center.mjs",
+    "server/docs/playbook.mjs",
+    "server/env-guard.mjs",
+    "vercel.json",
+    "js/services/auth.js",
+    "js/utils/password.js"
+   ],
+   "page": "",
+   "file": "docs/playbook/30-seguranca.md",
+   "sections": [
+    {
+     "id": "modelo-de-ameacas-resumo",
+     "heading": "Modelo de ameaças (resumo)",
+     "level": 2,
+     "md": "| Ameaça | Barreira principal |\n|---|---|\n| Usuário lê ou altera dados de **outro** usuário | Rules: todo caminho exige `request.auth.uid == userId`; negação padrão |\n| Navegador forja saldo, status ou valores | Rules negam movimentos liquidados; o servidor recalcula tudo e ignora saldo/status do cliente |\n| Credencial administrativa vaza | Service account só em `FIREBASE_SERVICE_ACCOUNT` (Vercel); nunca no navegador; `.gitignore` bloqueia `serviceAccount*`, `*-adminsdk*`, `.env*` |\n| Token roubado ou conta desativada continua valendo | `verifyIdToken(token, true)` (checa revogação) em `/api/finance`; claim admin relida no Auth a cada chamada administrativa |\n| Operação destrutiva com sessão antiga | `data.clearOwn` exige login feito há ≤ 5 min (`RECENT_LOGIN_SECONDS`) |\n| Injeção de script (XSS) | Sem `innerHTML` com dado de usuário; CSP sem `unsafe-inline` em scripts; markdown do playbook vira tokens + `textContent` |\n| Esgotar a cota do Firestore / abuso da API | Rate limit no Firewall da Vercel (30 req/min/IP); chave web restrita; App Check **desligado** (ver abaixo) |\n| Fórmulas em CSV exportado | `csvField` neutraliza `= + - @`, tab e CR em texto (`js/utils/csv.js`) |\n| Configuração insegura em produção | `server/env-guard.mjs` recusa variáveis de emulador em `production`/`preview` |"
+    },
+    {
+     "id": "camada-1-firestore-security-rules",
+     "heading": "Camada 1 — Firestore Security Rules",
+     "level": 2,
+     "md": "Arquivo `firestore.rules` (a referência extraída dos campos e permissões está em [Referência gerada](doc:referencia-gerada)).\n\n- **Negação padrão** (`match /{document=**}`). `users/{userId}` em si é sempre negado; só as subcoleções têm regra.\n- **Isolamento:** `isOwner(userId)` em tudo. `isAdmin()` = claim `admin == true` **no token**.\n- **Schemas fechados:** `keysOk([...])` lista os campos aceitos e `requiredOk` os obrigatórios; `text`, `cents`, `positiveCents`, `oneOf`, `stamp` validam tipos e limites. Datas `createdAt`/`updatedAt` só pelo servidor (`request.time`).\n- **Referências:** `ref()` exige que `accountId`, `categoryId` etc. existam na árvore do próprio usuário (`exists()`); **não enxerga documentos do mesmo lote**.\n- **Movimentos liquidados só pelo servidor:** receita `received`, despesa `paid`, transferência `confirmed`, fatura `paid`, e as coleções `debtPayments`, `goalTransactions`, `reversals`, `operations` e `batches` têm `create/update: if false`. `debtors.receivedCents` e `status: paid` também.\n- **Exclusão protegida:** conta, devedor e `debts` só o administrador apaga; lançamento já estornado não é apagado pelo dono.\n- **Admin com poderes mínimos:** lê e apaga documentos das coleções de domínio de qualquer usuário (consultas de grupo `{path=**}/<coleção>`); **não** cria, não edita, não toca `profile`, `settings` nem `auditLog`.\n- **`auditLog` create-only:** o dono cria com `action` **sem ponto** (`create`, `update`, `delete`…; formato `dominio.operacao` é exclusivo do servidor), `before`/`after` com até 60 chaves e `actorUid == auth.uid`. Ninguém atualiza nem apaga.\n\nToda alteração em `firestore.rules` exige teste em `tests/rules/` e publicação manual (ver [Operação e deploy](doc:operacao-deploy))."
+    },
+    {
+     "id": "camada-2-autenticacao-e-endpoints-do-servidor",
+     "heading": "Camada 2 — Autenticação e endpoints do servidor",
+     "level": 2,
+     "md": "Todos os endpoints esperam `Authorization: Bearer <ID token do Firebase>` (sem cookies, logo sem CSRF) e devolvem `Cache-Control: no-store`.\n\n| Endpoint | Quem pode | Como valida |\n|---|---|---|\n| `POST /api/finance` | usuário autenticado | `verifyIdToken(token, true)` (Admin SDK, com checagem de revogação). Caminhos de documento nascem do `uid` do token. |\n| `POST /api/validation` | **admin** | Token válido + `admin === true` **no token** + claim atual consultada com `getUser` (revogação vale na hora). |\n| `GET/POST /api/admin-claims` | **admin** | Token verificado **localmente** (RS256 com as chaves públicas do Google; confere `iss`, `aud`, `exp`, `sub`) + `accounts:lookup` administrativo (`admin === true` e conta ativa). Impede auto-revogação. |\n| `GET /api/docs` | **admin** | Mesma autorização do `admin-claims` (`authorizeAdmin`). |\n\nValidação de parâmetros em `server/finance/core.mjs` (`v.id`, `v.cents`, `v.date`, `v.text`, `v.enum`): ids só `[A-Za-z0-9_-]{1,128}`; valores positivos e ≤ R$ 1 bilhão; campos proibidos (`balanceCents`, `receivedCents`, `status`, `uid`, `userId`) são **recusados**, não ignorados (exceto onde a operação declara `allowParams`)."
+    },
+    {
+     "id": "politicas-opcionais-por-variavel-de-ambiente",
+     "heading": "Políticas opcionais por variável de ambiente",
+     "level": 3,
+     "md": "- `REQUIRE_VERIFIED_EMAIL=true` → 403 `EMAIL_NOT_VERIFIED` sem e-mail verificado. O usuário reenvia o link em *Configurações → Segurança — e-mail*.\n- `APPCHECK_ENFORCE=true` → exige `X-Firebase-AppCheck` válido. **Dormente:** o cliente só envia o token se `APP_CHECK_SITE_KEY` (em `js/firebase/config.js`) estiver preenchida."
+    },
+    {
+     "id": "login-recente",
+     "heading": "Login recente",
+     "level": 3,
+     "md": "`data.clearOwn` marca `recentLogin: true`: `handleFinance` exige `auth_time` do token ≤ 300 s (403 `RECENT_LOGIN_REQUIRED`). Usa 403 de propósito, para o cliente **não** tentar renovar o token e repetir (o fluxo trata 401 assim)."
+    },
+    {
+     "id": "camada-3-navegador",
+     "heading": "Camada 3 — Navegador",
+     "level": 2,
+     "md": "- **CSP** (`vercel.json`): `default-src 'self'`; `script-src` com `'self'`, o hash do import map, `gstatic.com` (SDK do Firebase), `apis.google.com` (carregado pelo Firebase Auth em Safari/mobile) e `google.com/recaptcha/` (App Check dormente); `style-src` com `'unsafe-inline'` (há atributos `style=`); `frame-src` só o domínio de autenticação do projeto e reCAPTCHA; `connect-src` só Firebase; `object-src 'none'`, `frame-ancestors 'none'`.\n- **SRI:** módulos do Firebase no import map têm `integrity` (SHA-384); o `lucide` é **local** (`assets/vendor/lucide-0.462.0.min.js`) com SRI. Ao trocar a versão do SDK, recalcule os hashes e o hash CSP (o teste acusa).\n- **Senha:** mínimo 10 no app (`validateNewPassword`) **e** no Firebase (política no console). Máximo 128 no app.\n- **Sessão:** persistência local do Firebase Auth; o service worker não cacheia nada."
+    },
+    {
+     "id": "decisoes-de-seguranca-vf-sec-e-estado",
+     "heading": "Decisões de segurança (VF-SEC) e estado",
+     "level": 2,
+     "md": "| Tarefa | O que ficou |\n|---|---|\n| **SEC-01** | `checkRevoked` no servidor; login recente em `data.clearOwn`. |\n| **SEC-02** | `server/env-guard.mjs`: variáveis de emulador recusadas em produção/preview. |\n| **SEC-03** | Rate limit no Firewall da Vercel. **App Check não ativado** (custo/faturamento do reCAPTCHA Enterprise não confirmados; plano Spark). Código dormente e pronto. |\n| **SEC-04** | `.vercelignore` + redirects para `/server`, `/tests`, `/docs`, `/scripts`. |\n| **SEC-05** | `lucide` local; `unpkg.com` removido da CSP; `frame-src` restrito. |\n| **SEC-06** | Senha ≥ 10 (app + console, modo \"Exigir\"); e-mail de verificação no cadastro; painel de verificação em Configurações; proteção contra enumeração de e-mails. MFA ficou opcional. |\n| **SEC-07** | `auditLog`: sem `action` com ponto e mapas ≤ 60 chaves. |\n| **SEC-08** | CSV neutraliza `-` inicial em texto. |\n| **SEC-09** | `firebase-admin` 13.10; `npm audit` de produção no CI. |"
+    },
+    {
+     "id": "riscos-aceitos-e-limites-conhecidos",
+     "heading": "Riscos aceitos e limites conhecidos",
+     "level": 2,
+     "md": "- **Administrador** lê e apaga dados de todos os usuários e lista e-mails (por desenho). A claim no token vale até 1 h após revogação **nas Rules**; os endpoints do servidor consultam a claim atual.\n- **App Check desligado:** criação de contas e chamadas diretas ao Firestore com a chave web pública não têm esse freio. Mitigação: restrições da chave, Rules e rate limit em `/api/*`.\n- **`apis.google.com` na CSP:** necessário ao Firebase Auth em alguns navegadores; endpoints JSONP desse domínio são um bypass teórico de CSP caso exista injeção de HTML. Não há `innerHTML` com dado de usuário.\n- **Política de senha:** o app aceita 10+; o Firebase também (modo \"Exigir\"). Quem tinha senha curta precisa redefinir por e-mail.\n- **Frase de confirmação** de ações destrutivas é estática (barreira contra clique, não contra atacante).\n- **Admin sem MFA:** MFA por SMS não existe no Spark; TOTP depende de Identity Platform (não verificado se é gratuito aqui)."
+    },
+    {
+     "id": "o-que-monitorar",
+     "heading": "O que monitorar",
+     "level": 2,
+     "md": "- Leituras do Firestore no console (cota diária) e erros 429 na API (limite do Firewall).\n- Logs de função na Vercel: `admin_claims_rejected`, `finance_rejected`, `finance_error`, `docs_unavailable` (só códigos/motivos; nunca tokens, chaves ou e-mails).\n- Novas contas inesperadas em *Authentication → Usuários*.\n- `npm audit --omit=dev` (roda no CI)."
+    },
+    {
+     "id": "nunca-fazer",
+     "heading": "Nunca fazer",
+     "level": 2,
+     "md": "- Colocar service account, Admin SDK ou segredos no navegador ou no repositório.\n- Definir `FIREBASE_AUTH_EMULATOR_HOST`/`FIRESTORE_EMULATOR_HOST` na Vercel.\n- Trocar `firebase-admin` por major novo sem validar em **preview** (o 14 quebrou `/api/finance` com `ERR_REQUIRE_ESM`).\n- Usar `innerHTML` com dado vindo do usuário ou do Firestore.\n- Relaxar uma Rule \"para testar\" em produção sem teste correspondente em `tests/rules/`."
+    }
+   ]
+  },
+  {
+   "id": "nucleo-financeiro",
+   "title": "Núcleo financeiro",
+   "category": "Funcionalidades",
+   "tags": [
+    "núcleo",
+    "saldo",
+    "centavos",
+    "idempotência",
+    "transação",
+    "estorno",
+    "modelo",
+    "servidor"
+   ],
+   "summary": "Como o dinheiro é modelado e processado — saldo derivado, centavos, operações do servidor com transação e idempotência, estornos, retries e auditoria.",
+   "files": [
+    "js/core/model/ledger.js",
+    "js/core/model/schemas.js",
+    "js/utils/money.js",
+    "server/finance/core.mjs",
+    "server/finance/ops.mjs",
+    "js/services/financeApi.js",
+    "js/services/reversals.js",
+    "js/core/integrity.js"
+   ],
+   "page": "",
+   "file": "docs/playbook/funcionalidades/11-nucleo-financeiro.md",
+   "sections": [
+    {
+     "id": "resumo",
+     "heading": "Resumo",
+     "level": 2,
+     "md": "Tudo que mexe em dinheiro obedece às mesmas regras. Entender esta ficha explica as demais."
+    },
+    {
+     "id": "modelo-e-invariantes",
+     "heading": "Modelo e invariantes",
+     "level": 2,
+     "md": "- **Centavos inteiros.** `js/utils/money.js` (`parseMoneyToCents`, `centsToMoneyString`, `formatCents`) é a **única** implementação. No servidor, `v.cents` exige inteiro > 0 e ≤ `MAX_CENTS` (R$ 1 bilhão).\n- **Datas** como texto ISO `AAAA-MM-DD` no modelo; `Timestamp` só na borda do Firestore (`toFirestoreData`, `js/services/firestore.js:36`). `todayInAppZone` (`js/utils/dates.js:74`) define \"hoje\" no fuso do app.\n- **Schemas** em `js/core/model/schemas.js` (`SCHEMAS`) espelham `firestore.rules`; `validation.js` valida e normaliza (`validateEntity`, `buildEntity`). `js/core/model.js` é só um barrel.\n- **Nada derivado é gravado.** Saldo, limite usado, total de fatura aberta, pendente do devedor, valor guardado de meta, gasto de orçamento e previsão são sempre calculados."
+    },
+    {
+     "id": "saldo-derivado",
+     "heading": "Saldo derivado",
+     "level": 2,
+     "md": "`accountBalances` (`js/core/model/ledger.js:62`) calcula, por conta:\n\n```\nsaldo = saldo de abertura (initialBalanceCents)\n      + receitas recebidas (received)       − despesas pagas (paid)\n      + transferências confirmadas recebidas − enviadas\n      + recebimentos de devedores (debtPayments)\n      − aportes em metas + resgates (goalTransactions)\n      − faturas de cartão pagas com a conta\n```\n\n- Transferência pendente ou cancelada não move dinheiro.\n- Se a conta tem `openingDate`, só movimentos **a partir** dela entram (o saldo de abertura já inclui o anterior).\n- Recebimento de devedor e movimento de meta não têm status: quando estornados (documento em `reversals`) deixam de contar.\n- `orphanMovements` aponta movimentos cuja conta não existe mais (o dinheiro \"some\" do saldo; a interface avisa).\n\nO mesmo cálculo roda no cliente (dashboard, bancos) e no servidor (`ctx.balanceOf`, `server/finance/core.mjs:198`), que lê dentro da transação as 8 fontes de movimento."
+    },
+    {
+     "id": "operacoes-do-servidor",
+     "heading": "Operações do servidor",
+     "level": 2,
+     "md": "Contrato: `POST /api/finance` com `{ op, operationId, params }` e `Authorization: Bearer <ID token>`. A lista de operações está em [Referência gerada](doc:referencia-gerada).\n\n1. `handleFinance` (`server/finance/core.mjs:303`) valida o token, recusa campos proibidos (`balanceCents`, `receivedCents`, `status`, `uid`, `userId`) e normaliza com `def.validate`.\n2. `executeOnce` (`core.mjs:236`) abre uma **transação**: lê o registro de idempotência `users/{uid}/operations/{operationId}`; se existir, devolve o resultado guardado (`idempotent: true`) ou 409 se os parâmetros diferem.\n3. `def.prepare(ctx, params)` **só lê** e devolve `{ result, apply }`. Regra do Admin SDK: todas as leituras vêm antes das escritas.\n4. `apply` grava o movimento, `ctx.touchAccount()` (incrementa `ledgerSeq` da conta), o registro em `operations` e uma entrada em `auditLog` — tudo na **mesma transação**.\n5. **Serialização:** como toda operação que altera saldo lê e escreve o documento da conta, duas transações na mesma conta conflitam e o SDK repete uma delas. Assim a checagem \"saldo suficiente\" nunca enxerga estado velho.\n6. **Retries:** `withRetries` repete até 4 vezes falhas transitórias (`ABORTED`, `UNAVAILABLE`…), com backoff e jitter. Erros de negócio (`FinanceError`) não são repetidos.\n\nErros de negócio têm código estável (`INSUFFICIENT_BALANCE`, `INVALID_STATE`, `ACCOUNT_NOT_ACTIVE`, `ALREADY_REVERSED`, `NOT_FOUND`, `EXCEEDS_REMAINING`…) e a tela mostra a mensagem real do servidor."
+    },
+    {
+     "id": "cliente-das-operacoes",
+     "heading": "Cliente das operações",
+     "level": 2,
+     "md": "`js/services/financeApi.js`: `callFinance(op, params, { operationId })` (linha 43) e `financeResult` (adaptador para `{ ok, errors }`).\n\n- Gere o `operationId` **ao abrir o formulário** (`newOperationId`): reenviar o mesmo formulário repete a mesma chave e não duplica.\n- Chamadas simultâneas com a mesma chave compartilham uma promessa (`inflight`).\n- 401 renova o token e repete uma vez; 502/503/504 e `retryable` repetem com backoff e **a mesma chave**; timeout de 15 s."
+    },
+    {
+     "id": "estornos-reversal-create",
+     "heading": "Estornos (reversal.create)",
+     "level": 2,
+     "md": "Correção de lançamento liquidado por **lançamento compensatório**. O original é preservado; o estorno vai para `reversals/{coleção}_{id}`, com motivo, e ajusta saldo/status na mesma transação. Tipos: receita, despesa, transferência, fatura, recebimento de devedor e movimento de meta (`REVERSIBLE` em `ops.mjs`). Estorno duplicado dá `ALREADY_REVERSED`; um lançamento que voltou a ser estornável recebe um novo estorno com sufixo (`_2`, `_3`…). Original estornado não é apagado pelo dono (Rules). Cliente: `js/services/reversals.js`."
+    },
+    {
+     "id": "lote-e-idempotencia-por-item",
+     "heading": "Lote e idempotência por item",
+     "level": 2,
+     "md": "Quitação em lote de devedores (`debt.settleBatch`) usa um documento em `batches` e **uma transação por parcela**, com estado explícito do lote e retomada; limite de 500 itens. Ver [Devedores](doc:devedores)."
+    },
+    {
+     "id": "auditoria-de-integridade",
+     "heading": "Auditoria de integridade",
+     "level": 2,
+     "md": "`js/core/integrity.js` (puro) recalcula do zero o que os documentos implicam e **compara** com o gravado (agregados do devedor, status de parcelas e faturas) devolvendo `findings` com gravidade; `js/services/integrity.js` lê as coleções (com teto) e chama o núcleo. **Não corrige nada.** Usada pela Central de validação (ver [Administração](doc:administracao))."
+    },
+    {
+     "id": "previsao-do-mes",
+     "heading": "Previsão do mês",
+     "level": 2,
+     "md": "`js/core/forecast.js` (puro) e `js/services/forecast.js`: \"quanto vou gastar e quanto sobra\". Fórmula em `monthlyForecast` (`forecast.js:104`): saldo projetado = saldo atual das contas ativas + receitas previstas − despesas pendentes − faturas que vencem no mês etc. Assinatura no cartão separa **comprometimento** (mês da cobrança) de **saída de caixa** (mês de vencimento da fatura) e descarta duplicidades. Mostrada no [Dashboard](doc:dashboard)."
+    },
+    {
+     "id": "armadilhas",
+     "heading": "Armadilhas",
+     "level": 2,
+     "md": "- O lote do cliente (`commitAtomic`) **não é transação**: nunca use para decidir com base em saldo.\n- `exists()` das Rules não vê documentos do mesmo lote: compras de cartão e faturas novas vão em dois lotes.\n- Mudou `SCHEMAS`? Confira `firestore.rules`, `tests/rules/`, `js/core/importSchema.js` (CSV) e as telas.\n- Acima do `HISTORY_LIMIT` (5000) por consulta, a operação **recusa** com `HISTORY_TOO_LARGE`, em vez de calcular saldo incompleto."
+    }
+   ]
+  },
+  {
+   "id": "autenticacao",
+   "title": "Autenticação (login, cadastro, senha)",
+   "category": "Funcionalidades",
+   "tags": [
+    "autenticação",
+    "login",
+    "cadastro",
+    "senha",
+    "e-mail",
+    "sessão",
+    "firebase-auth"
+   ],
+   "summary": "Login, criação de conta, redefinição de senha, política de senha, verificação de e-mail e guarda de sessão das páginas internas.",
+   "files": [
+    "index.html",
+    "js/auth-page.js",
+    "js/services/auth.js",
+    "js/utils/password.js",
+    "js/core/guard.js",
+    "js/firebase/client.js",
+    "js/firebase/config.js"
+   ],
+   "page": "",
+   "file": "docs/playbook/funcionalidades/12-autenticacao.md",
+   "sections": [
+    {
+     "id": "o-que-o-usuario-ve",
+     "heading": "O que o usuário vê",
+     "level": 2,
+     "md": "`index.html` tem três abas: **Entrar**, **Criar conta** e **Esqueci a senha**, controladas por `js/auth-page.js`. Quem já está autenticado é redirecionado para `pages/dashboard.html` (`redirectIfAuthenticated`, `js/core/guard.js:30`)."
+    },
+    {
+     "id": "como-funciona",
+     "heading": "Como funciona",
+     "level": 2,
+     "md": "- **Provedor:** e-mail/senha do Firebase Authentication. Persistência `browserLocalPersistence` (a sessão sobrevive ao fechar a aba).\n- **Serviço:** `js/services/auth.js` é a **única** porta para o SDK de autenticação (`signIn`, `register`, `resetPassword`, `signOut`, `currentUser`, `onSessionChange`, `changePassword`, `sendResetToCurrentUser`, `sendVerificationToCurrentUser`, `refreshEmailVerified`). Telas nunca chamam o SDK direto.\n- **Mensagens:** `AUTH_ERRORS` traduz códigos do Firebase para pt-BR (`auth/invalid-credential`, `auth/too-many-requests`, `auth/weak-password`, `auth/password-does-not-meet-requirements`…). Código desconhecido cai na mensagem do SDK.\n- **Guarda de sessão:** toda página interna chama `requireSession()` (`js/core/guard.js:10`); sem usuário, vai para o login com `?reason=auth&next=<página>`. Depois do login, o app volta para `pages/<next>` (o destino é sempre prefixado por `pages/`, então não há redirecionamento para outros sites).\n- **Configuração ausente:** se `js/firebase/config.js` ainda tem placeholders, a tela mostra um aviso (`configMissing`)."
+    },
+    {
+     "id": "politica-de-senha",
+     "heading": "Política de senha",
+     "level": 2,
+     "md": "- App: **mínimo 10, máximo 128** caracteres (`MIN_PASSWORD_LENGTH`, `MAX_PASSWORD_LENGTH`, `js/utils/password.js`); `validateNewPassword` também recusa só espaços e caractere repetido. Vale no **cadastro** (`auth-page.js`) e na **troca de senha** (`validatePasswordChange`).\n- Firebase (console): mínimo 10, modo **\"Exigir a aplicação\"**. Quem tinha senha curta só entra após redefinir por e-mail.\n- O erro `auth/password-does-not-meet-requirements` (política do console) é traduzido."
+    },
+    {
+     "id": "verificacao-de-e-mail",
+     "heading": "Verificação de e-mail",
+     "level": 2,
+     "md": "- O cadastro **envia o link** de verificação (`sendEmailVerification`, melhor esforço: falha de envio não impede o cadastro).\n- O usuário pode **reenviar** e confirmar em *Configurações → Segurança — e-mail* (ver [Configurações](doc:configuracoes)).\n- A verificação só é **exigida** se `REQUIRE_VERIFIED_EMAIL=true` na Vercel (desligado por padrão; ver [Segurança](doc:seguranca))."
+    },
+    {
+     "id": "emuladores-e-modo-demo",
+     "heading": "Emuladores e modo demo",
+     "level": 2,
+     "md": "`js/firebase/client.js` usa os **emuladores** (Auth 9099, Firestore 8080) quando a página roda em `localhost`/`127.0.0.1`, e uma config DEMO se a config real ainda for placeholder. `?mode=demo` e `?mode=firebase` forçam o modo (só fazem sentido em `localhost`; a escolha fica em `sessionStorage`). `?emulator=0` desliga os emuladores."
+    },
+    {
+     "id": "armadilhas",
+     "heading": "Armadilhas",
+     "level": 2,
+     "md": "- `getIdToken(true)` é necessário para novas claims (`admin`, `email_verified`) entrarem no token.\n- Troca de senha exige **reautenticação** com a senha atual (`reauthenticateWithCredential`) antes de `updatePassword`; contas só com provedor externo veem aviso de que a senha é gerenciada pelo provedor.\n- `data.clearOwn` exige login recente (≤ 5 min); sessão antiga recebe 403 `RECENT_LOGIN_REQUIRED`."
+    }
+   ]
+  },
+  {
+   "id": "configuracoes",
+   "title": "Configurações",
+   "category": "Funcionalidades",
+   "tags": [
+    "configurações",
+    "perfil",
+    "tema",
+    "senha",
+    "e-mail",
+    "preferências"
+   ],
+   "summary": "Perfil, tema, ocultar valores, primeiro dia da semana, troca de senha, verificação de e-mail e atalhos para manutenção e playbook.",
+   "files": [
+    "js/modules/configuracoes.js",
+    "js/services/preferences.js",
+    "js/services/auth.js",
+    "js/components/theme.js"
+   ],
+   "page": "configuracoes",
+   "file": "docs/playbook/funcionalidades/13-configuracoes.md",
+   "sections": [
+    {
+     "id": "resumo",
+     "heading": "Resumo",
+     "level": 2,
+     "md": "Rota `/configuracoes` (item de menu). Módulo `js/modules/configuracoes.js`."
+    },
+    {
+     "id": "paineis",
+     "heading": "Painéis",
+     "level": 2,
+     "md": "1. **Perfil e preferências:** nome, **tema** (`light`/`dark`/`system`), **ocultar valores** e **primeiro dia da semana** (0–6). Gravados em `users/{uid}/profile/main` e `users/{uid}/settings/main` por `js/services/preferences.js` (`getProfile`, `saveProfile`, `getSettings`, `saveSettings`). O tema também fica em `localStorage` (chave da UI) para evitar o flash ao recarregar; o valor da conta prevalece em um dispositivo novo.\n2. **Segurança — senha** (`buildPasswordPanel`): senha atual + nova + confirmação, com **reautenticação** antes de `updatePassword`; alternativa por e-mail de redefinição. Só para contas com provedor `password`.\n3. **Segurança — e-mail** (`buildEmailVerificationPanel`): mostra se o e-mail está verificado, **Enviar e-mail de verificação** e **Já verifiquei** (recarrega o usuário e renova o ID token).\n4. **Atalhos:** *Abrir manutenção de dados* (qualquer usuário) e *Abrir playbook (administradores)* (só quem tem a claim `admin`; a barreira real é o servidor)."
+    },
+    {
+     "id": "regras-espelhadas-das-rules",
+     "heading": "Regras (espelhadas das Rules)",
+     "level": 2,
+     "md": "- `profile`: `name` 1–80, `email` 1–160, `currency` = `BRL`, `locale` = `pt-BR`; `createdAt` imutável.\n- `settings`: `theme` ∈ `light|dark|system`, `hideValues` booleano, `firstWeekday` inteiro 0–6.\n- Ambos são **documentos únicos** (`docId == 'main'`) e **nunca são apagados** pelo cliente."
+    },
+    {
+     "id": "armadilhas",
+     "heading": "Armadilhas",
+     "level": 2,
+     "md": "- O tema é aplicado antes de carregar a conta (`applyStoredTheme` em `js/app.js`); `setThemePersister` grava na conta depois.\n- Painéis de senha e e-mail só aparecem para quem tem o provedor `password` (`hasPasswordProvider`)."
+    }
+   ]
+  },
+  {
+   "id": "dashboard",
+   "title": "Dashboard",
+   "category": "Funcionalidades",
+   "tags": [
+    "dashboard",
+    "saldo",
+    "previsão",
+    "vencimentos",
+    "orçamentos",
+    "leitura"
+   ],
+   "summary": "Visão geral somente leitura: saldo total, resultado do período, pontos de atenção, previsão do mês, vencimentos, orçamentos e devedores.",
+   "files": [
+    "js/modules/dashboard.js",
+    "js/services/dashboard.js",
+    "js/services/forecast.js",
+    "js/core/aggregates.js",
+    "js/core/forecast.js",
+    "js/services/balances.js"
+   ],
+   "page": "dashboard",
+   "file": "docs/playbook/funcionalidades/14-dashboard.md",
+   "sections": [
+    {
+     "id": "resumo",
+     "heading": "Resumo",
+     "level": 2,
+     "md": "Rota `/dashboard` (primeira do menu). **Somente leitura**: nada é gravado, tudo é derivado."
+    },
+    {
+     "id": "o-que-mostra",
+     "heading": "O que mostra",
+     "level": 2,
+     "md": "- **Visão geral:** saldo total das contas e resultado do período (receitas e despesas **realizadas**). Períodos: mês (padrão), semestre, ano e todo o período.\n- **Pontos de atenção:** vencidos, orçamentos estourados, avisos de leitura truncada.\n- **Previsão do mês** e o bloco **\"Como o saldo projetado foi calculado\"** (transparência da conta), mais **compromissos dos próximos meses**.\n- **Próximos vencimentos**, **orçamentos** do mês, **devedores** (a receber) e cartões/faturas."
+    },
+    {
+     "id": "como-carrega-os-dados",
+     "heading": "Como carrega os dados",
+     "level": 2,
+     "md": "`loadDashboard(uid)` (`js/services/dashboard.js:58`):\n\n- Lê contas e movimentos **realizados** (receitas `received`, despesas `paid`, transferências `confirmed`, recebimentos de devedores, aportes de metas e estornos), cada coleção com teto `READ_LIMIT` = 1000. Se alguma atinge o teto, `truncated` lista as coleções e a tela avisa que o **saldo pode estar incompleto**.\n- Cada fonte é **isolada** (`DASHBOARD_SOURCES`): se uma falha, as demais continuam e `failed` informa quais (a tela degrada, não quebra).\n- Vencimentos usam os índices (status, data) declarados em `firestore.indexes.json`.\n- O custo por carga é de algumas dezenas de consultas e até ~5×1000 documentos: **cuidado com a cota diária do Spark** ao adicionar fontes.\n\nA previsão vem de `js/services/forecast.js` → `monthlyForecast` em `js/core/forecast.js` (ver [Núcleo financeiro](doc:nucleo-financeiro)). Agregações do período em `js/core/aggregates.js` (convenção: \"realizado\" = receita `received` por `receivedDate`; despesa `paid` por `paidDate`)."
+    },
+    {
+     "id": "armadilhas",
+     "heading": "Armadilhas",
+     "level": 2,
+     "md": "- Sem dados, mostra zeros e estados vazios: **nada é demonstração**.\n- Mudou uma fonte? Atualize `DASHBOARD_SOURCES` e o tratamento de `failed`.\n- O saldo mostrado aqui precisa bater com **Bancos** e com o servidor (`tests/integration/modules-consistency.test.mjs` confere com um oráculo independente)."
+    }
+   ]
+  },
+  {
+   "id": "bancos",
+   "title": "Bancos e contas",
+   "category": "Funcionalidades",
+   "tags": [
+    "contas",
+    "bancos",
+    "saldo",
+    "abertura",
+    "arquivar",
+    "excluir"
+   ],
+   "summary": "Cadastro de contas, saldo derivado sob demanda, ajuste do saldo de abertura, arquivamento e exclusão só sem histórico.",
+   "files": [
+    "js/modules/bancos.js",
+    "js/services/accounts.js",
+    "js/services/balances.js",
+    "js/core/model/ledger.js",
+    "server/finance/ops.mjs"
+   ],
+   "page": "bancos",
+   "file": "docs/playbook/funcionalidades/15-bancos.md",
+   "sections": [
+    {
+     "id": "resumo",
+     "heading": "Resumo",
+     "level": 2,
+     "md": "Rota `/bancos`. Coleção `users/{uid}/accounts`."
+    },
+    {
+     "id": "campos-e-tipos",
+     "heading": "Campos e tipos",
+     "level": 2,
+     "md": "`institution`, `name` (opcional), `type` (`checking`, `salary`, `savings`, `digital`, `investment`, `benefit`, `other`), `initialBalanceCents`, `openingDate` (opcional), `color`, `status` (`active`, `inactive`, `archived`) e `ledgerSeq`. A lista exata aceita pelas Rules está em [Referência gerada](doc:referencia-gerada)."
+    },
+    {
+     "id": "saldo",
+     "heading": "Saldo",
+     "level": 2,
+     "md": "- **Saldo inicial** (de abertura) é sempre visível. O **saldo atual** é derivado (`accountBalances`) e calculado **sob demanda** por botão, para poupar a cota de leituras (`loadBalances`, `js/services/balances.js`).\n- Se a leitura dos movimentos foi negada ou truncada, a tela mostra **\"saldo indisponível\"** em vez de um número errado (fail-closed)."
+    },
+    {
+     "id": "acoes",
+     "heading": "Ações",
+     "level": 2,
+     "md": "| Ação | Onde acontece | Observação |\n|---|---|---|\n| Criar / editar | Firestore direto (`createAccount`, `updateAccount`) | As Rules **impedem** o cliente de mudar `initialBalanceCents`, `openingDate` e `ledgerSeq` depois de criada. |\n| **Ajustar saldo** | Servidor: `account.adjustOpening` | Informa o saldo real hoje; o servidor recalcula o **saldo de abertura** (`computeOpeningAdjustment`) sem alterar nenhuma receita, despesa ou transferência. Recusa se a leitura foi truncada e se a abertura ficaria negativa. Pode definir `openingDate`. |\n| **Arquivar / reativar** | Servidor: `account.archive`, `account.unarchive` | Conta inativa/arquivada não recebe lançamentos (`ACCOUNT_NOT_ACTIVE`). |\n| **Excluir** | Servidor: `account.delete` | **Só sem histórico**: qualquer referência em receitas, despesas, transferências, cartões, metas, recebimentos etc. bloqueia. O cliente também não pode apagar (Rules: só admin). |\n\n`countAccountUsage` e `ACCOUNT_LINK_QUERIES` (`js/services/accounts.js`) montam a mensagem \"conta em uso\" com as contagens por tipo."
+    },
+    {
+     "id": "armadilhas",
+     "heading": "Armadilhas",
+     "level": 2,
+     "md": "- Conta com `openingDate`: só movimentos **a partir** da data entram no saldo.\n- Movimentos que apontam para conta inexistente (\"órfãos\") somem do saldo; `orphanMovements` avisa.\n- Toda operação que altera saldo incrementa `ledgerSeq` da conta; não escreva esse campo pelo cliente."
+    }
+   ]
+  },
+  {
+   "id": "categorias",
+   "title": "Categorias",
+   "category": "Funcionalidades",
+   "tags": [
+    "categorias",
+    "tipos",
+    "vínculos",
+    "exclusão"
+   ],
+   "summary": "Categorias de receita, despesa ou ambas; compatibilidade com o tipo de lançamento e exclusão bloqueada quando em uso.",
+   "files": [
+    "js/modules/categorias.js",
+    "js/services/categories.js",
+    "js/core/model/validation.js"
+   ],
+   "page": "categorias",
+   "file": "docs/playbook/funcionalidades/16-categorias.md",
+   "sections": [
+    {
+     "id": "resumo",
+     "heading": "Resumo",
+     "level": 2,
+     "md": "Rota `/categorias`. Coleção `users/{uid}/categories`: `name` (1–60), `kind` (`income`, `expense`, `both`) e `color`."
+    },
+    {
+     "id": "regras",
+     "heading": "Regras",
+     "level": 2,
+     "md": "- **Compatibilidade:** receita só aceita categoria `income`/`both`; despesa só `expense`/`both` (`checkCategoryForMovement`, `js/core/model/validation.js`). O cliente dá feedback imediato e o **servidor revalida**.\n- **Exclusão segura (fail-closed):** `deleteCategory` conta vínculos em `CATEGORY_LINK_COLLECTIONS` (receitas, despesas, orçamentos, assinaturas e compras no cartão). Se houver qualquer vínculo **ou** a verificação falhar, **não exclui** e explica o motivo. As Rules, sozinhas, permitiriam apagar: a proteção é do service.\n- Edição e criação vão direto ao Firestore (caminho A); toda mudança é auditada."
+    }
+   ]
+  },
+  {
+   "id": "receitas",
+   "title": "Receitas",
+   "category": "Funcionalidades",
+   "tags": [
+    "receitas",
+    "recebimento",
+    "estorno",
+    "saldo",
+    "recorrência",
+    "paginação"
+   ],
+   "summary": "Cadastro de receitas previstas e recebidas, recebimento e estorno pelo servidor, filtros e paginação.",
+   "files": [
+    "js/modules/receitas.js",
+    "js/services/incomes.js",
+    "js/components/reversal-modal.js",
+    "server/finance/ops.mjs",
+    "js/core/model/schemas.js"
+   ],
+   "page": "receitas",
+   "file": "docs/playbook/funcionalidades/17-receitas.md",
+   "sections": [
+    {
+     "id": "resumo",
+     "heading": "Resumo",
+     "level": 2,
+     "md": "Rota `/receitas`. Coleção `users/{uid}/incomes`."
+    },
+    {
+     "id": "modelo",
+     "heading": "Modelo",
+     "level": 2,
+     "md": "`description`, `categoryId`, `amountCents` (> 0), `expectedDate`, `receivedDate`, `accountId`, `status` (`pending`, `received`, `cancelled`), `recurrence` (`none`, `monthly`, `weekly`, `yearly`), `notes` e `operationId`. **`recurrence` é informativo**: não gera lançamentos automáticos; a previsão só soma os recorrentes."
+    },
+    {
+     "id": "ciclo-de-vida",
+     "heading": "Ciclo de vida",
+     "level": 2,
+     "md": "```\ncriar (pending) ──► marcar como recebida (servidor) ──► estornar (servidor)\n      │                                                       \n      └──► cancelar / editar / excluir (cliente, só enquanto não recebida)\n```\n\n| Passo | Quem faz | Detalhe |\n|---|---|---|\n| Criar | **Servidor** (`income.create`) | Valida categoria (tipo) e conta (ativa) dentro da transação. Pedir `received` já liquida e entra no saldo atomicamente. O cliente valida o modelo antes (`createIncome`, `js/services/incomes.js:76`). |\n| Editar | Cliente (Firestore) | **Só receita não recebida.** Se o formulário pede `received`, grava como prevista e chama o servidor para receber. |\n| **Receber** | **Servidor** (`income.receive`) | Só de `pending`; atualiza status e `receivedDate` e incrementa `ledgerSeq`. |\n| Cancelar | Cliente | Só `pending`. |\n| Excluir | Cliente | Só não recebida e **não estornada** (Rules). |\n| **Estornar** | **Servidor** (`reversal.create`, kind `income`) | Recebida é **imutável**; correção = estorno com motivo (3–300 caracteres). Modal em `js/components/reversal-modal.js`. |\n\nAs Rules **proíbem** o cliente de gravar `status: received` ou de editar uma receita já recebida. Idempotência: o formulário gera `operationId` ao abrir."
+    },
+    {
+     "id": "tela",
+     "heading": "Tela",
+     "level": 2,
+     "md": "Tabela com ordenação por coluna e filtro de texto (`table-tools`), barra de filtros (status, mês, categoria), badge com a contagem e **paginação por cursor** (`createPager`, `createPagerFooter`: \"carregar mais\"). `listIncomes` ordena por `expectedDate` decrescente."
+    },
+    {
+     "id": "armadilhas",
+     "heading": "Armadilhas",
+     "level": 2,
+     "md": "- Receita recebida em conta **arquivada/inativa** é recusada.\n- Mudou o formato de `received`/datas? Revise `settleDates` (`incomes.js:36`) e o servidor.\n- O paralelo com [Despesas](doc:despesas) é proposital: não unifique sem ganho (decisão em `docs/ARCHITECTURE.md`)."
+    }
+   ]
+  },
+  {
+   "id": "despesas",
+   "title": "Despesas",
+   "category": "Funcionalidades",
+   "tags": [
+    "despesas",
+    "pagamento",
+    "estorno",
+    "saldo",
+    "parcelas",
+    "vencimento"
+   ],
+   "summary": "Cadastro de despesas pendentes e pagas, pagamento com checagem de saldo e estorno pelo servidor.",
+   "files": [
+    "js/modules/despesas.js",
+    "js/services/expenses.js",
+    "server/finance/ops.mjs",
+    "js/components/reversal-modal.js"
+   ],
+   "page": "despesas",
+   "file": "docs/playbook/funcionalidades/18-despesas.md",
+   "sections": [
+    {
+     "id": "resumo",
+     "heading": "Resumo",
+     "level": 2,
+     "md": "Rota `/despesas`. Coleção `users/{uid}/expenses`."
+    },
+    {
+     "id": "modelo",
+     "heading": "Modelo",
+     "level": 2,
+     "md": "`description`, `categoryId`, `amountCents`, `accountId`, `purchaseDate`, `dueDate`, `paidDate`, `status` (`pending`, `paid`, `cancelled`), `recurrence`, `notes`, `installmentGroupId` (texto opcional para identificar parcelamentos manuais) e `operationId`. `recurrence` é informativo, como em [Receitas](doc:receitas)."
+    },
+    {
+     "id": "ciclo-de-vida",
+     "heading": "Ciclo de vida",
+     "level": 2,
+     "md": "Igual ao de receitas, com o sinal invertido:\n\n| Passo | Quem faz | Detalhe |\n|---|---|---|\n| Criar | **Servidor** (`expense.create`) | Categoria `expense`/`both`; conta ativa. Se já nasce `paid`, **checa saldo suficiente** e debita atomicamente. |\n| Editar / cancelar / excluir | Cliente | **Só despesa não paga.** Paga é imutável. |\n| **Pagar** | **Servidor** (`expense.pay`) | Só de `pending`; recusa com `INSUFFICIENT_BALANCE` se o saldo da conta não cobre. |\n| **Estornar** | **Servidor** (`reversal.create`, kind `expense`) | Lançamento compensatório com motivo. |\n\nAs compras no cartão **não são despesas**: a conta só é debitada quando a **fatura** é paga (`invoice.pay`), sem dupla contagem. Ver [Cartões](doc:cartoes)."
+    },
+    {
+     "id": "tela",
+     "heading": "Tela",
+     "level": 2,
+     "md": "Mesmo padrão de Receitas: filtros, ordenação, paginação por cursor. `listExpenses` ordena por `dueDate` crescente (vencimentos mais próximos primeiro). O orçamento mensal por categoria (ver [Orçamentos](doc:orcamentos)) soma despesas **não canceladas** pelo mês de **vencimento**."
+    },
+    {
+     "id": "armadilhas",
+     "heading": "Armadilhas",
+     "level": 2,
+     "md": "- Pagar com conta sem saldo falha de propósito; a mensagem traz valores reais (`details` em centavos).\n- Despesa estornada volta a um estado que permite novo ciclo; o servidor controla pelos estornos em `reversals`."
+    }
+   ]
+  },
+  {
+   "id": "transferencias",
+   "title": "Transferências",
+   "category": "Funcionalidades",
+   "tags": [
+    "transferências",
+    "contas",
+    "metas",
+    "saldo",
+    "estorno"
+   ],
+   "summary": "Transferência entre contas e entre conta e meta (aporte/resgate), confirmação com checagem de saldo e estorno.",
+   "files": [
+    "js/modules/transferencias.js",
+    "js/services/transfers.js",
+    "js/services/goals.js",
+    "server/finance/ops.mjs"
+   ],
+   "page": "transferencias",
+   "file": "docs/playbook/funcionalidades/19-transferencias.md",
+   "sections": [
+    {
+     "id": "resumo",
+     "heading": "Resumo",
+     "level": 2,
+     "md": "Rota `/transferencias`. Coleção `users/{uid}/transfers`."
+    },
+    {
+     "id": "modelo",
+     "heading": "Modelo",
+     "level": 2,
+     "md": "`fromAccountId`, `toAccountId` (diferentes), `amountCents`, `date`, `reason`, `notes`, `status` (`pending`, `confirmed`, `cancelled`) e `operationId`."
+    },
+    {
+     "id": "transicoes",
+     "heading": "Transições",
+     "level": 2,
+     "md": "`TRANSFER_TRANSITIONS` (`js/services/transfers.js:90`) e `canTransitionTransfer` definem o que é permitido: só `pending` pode ser confirmada ou cancelada. Confirmada é imutável (estorne).\n\n| Passo | Quem faz | Detalhe |\n|---|---|---|\n| Criar | **Servidor** (`transfer.create`) | `pending` ou `confirmed`. Confirmada na criação checa saldo da origem e incrementa `ledgerSeq` das **duas** contas. |\n| **Confirmar** | **Servidor** (`transfer.confirm`) | Só de `pending`; checa saldo suficiente; **não** confirma transferência já estornada. |\n| Cancelar / editar / excluir | Cliente | Só `pending` (as Rules proíbem alterar confirmada). |\n| **Estornar** | **Servidor** (`reversal.create`, kind `transfer`) | Compensa nas duas contas. |"
+    },
+    {
+     "id": "transferencia-com-meta",
+     "heading": "Transferência com meta",
+     "level": 2,
+     "md": "A mesma tela aceita **metas** nos selects (\"Meta: nome (guardado …)\"): conta → meta é um **aporte** e meta → conta é um **resgate**, feitos pelo servidor (`goal.deposit`, `goal.withdraw`). Metas **vinculadas a uma conta** seguem o saldo dessa conta e não aceitam aporte/resgate. Ver [Metas](doc:metas)."
+    },
+    {
+     "id": "armadilhas",
+     "heading": "Armadilhas",
+     "level": 2,
+     "md": "- Duas transferências simultâneas de R$ 80 com saldo de R$ 100: só **uma** passa (serialização pelo `ledgerSeq`; teste em `tests/integration/server-transfers.test.mjs`).\n- Falha entre débito e crédito desfaz tudo (mesma transação).\n- Leitura negada de `reversals` (Rules antigas) coloca a tela de metas em **modo limitado**: estornos desconhecidos."
+    }
+   ]
+  },
+  {
+   "id": "orcamentos",
+   "title": "Orçamentos",
+   "category": "Funcionalidades",
+   "tags": [
+    "orçamentos",
+    "limite",
+    "categoria",
+    "mês",
+    "gasto"
+   ],
+   "summary": "Limite mensal por categoria; gasto, restante e percentual são derivados das despesas do mês.",
+   "files": [
+    "js/modules/orcamentos.js",
+    "js/services/budgets.js",
+    "js/core/aggregates.js"
+   ],
+   "page": "orcamentos",
+   "file": "docs/playbook/funcionalidades/20-orcamentos.md",
+   "sections": [
+    {
+     "id": "resumo",
+     "heading": "Resumo",
+     "level": 2,
+     "md": "Rota `/orcamentos`. Coleção `users/{uid}/budgets`: `categoryId`, `month` (`AAAA-MM`) e `limitCents` (> 0).\n\n- **Só o limite é gravado.** Gasto, restante e percentual são **derivados** de `js/core/aggregates.js`.\n- **Escopo do gasto:** despesas **não canceladas** pelo **mês de vencimento**. Compras no cartão **não entram**.\n- **Um orçamento por categoria/mês:** checado na leitura (há janela de concorrência, como nos demais cadastros do caminho A).\n- A edição muda só o limite (`updateBudgetLimit`). O dashboard mostra orçamentos estourados nos pontos de atenção.\n- A categoria precisa existir (Rules: `ref`); excluir uma categoria com orçamento é bloqueado pelo service de categorias."
+    }
+   ]
+  },
+  {
+   "id": "assinaturas",
+   "title": "Assinaturas",
+   "category": "Funcionalidades",
+   "tags": [
+    "assinaturas",
+    "recorrência",
+    "cobrança",
+    "cartão",
+    "devedor",
+    "previsão"
+   ],
+   "summary": "Cobranças recorrentes (mensal, semanal, anual); lançamento da cobrança no cartão, como dívida de um devedor ou só avançando a data.",
+   "files": [
+    "js/modules/assinaturas.js",
+    "js/services/subscriptions.js",
+    "js/services/subscriptionDebts.js",
+    "js/core/model/subscriptions.js",
+    "js/core/forecast.js"
+   ],
+   "page": "assinaturas",
+   "file": "docs/playbook/funcionalidades/21-assinaturas.md",
+   "sections": [
+    {
+     "id": "resumo",
+     "heading": "Resumo",
+     "level": 2,
+     "md": "Rota `/assinaturas`. Coleção `users/{uid}/subscriptions`: `name`, `amountCents`, `periodicity` (`monthly`, `weekly`, `yearly`), `nextChargeDate`, `chargeDay`, `accountId`, `cardId`, `debtorId`, `categoryId`, `status` (`active`, `paused`, `cancelled`) e `notes`.\n\n- Custo mensal e anual são calculados **só das ativas** (`js/core/model/subscriptions.js`); nada derivado é gravado.\n- `chargeDay` **nunca vem do formulário**: é derivado da data escolhida e só existe para os dias 29–31, que o fim do mês pode \"apagar\" (`chargeAnchorDay`).\n- A categoria deve aceitar despesa (`expense`/`both`); cartão cancelado e devedor cancelado são recusados."
+    },
+    {
+     "id": "cobranca-registersubscriptioncharge",
+     "heading": "Cobrança (registerSubscriptionCharge)",
+     "level": 2,
+     "md": "Lança **só a cobrança da data atual** (`nextChargeDate`) e avança a data um período; nunca gera cobranças futuras nem retroativas (a recorrência pode ser pausada ou cancelada). Destino:\n\n| Configuração | O que acontece |\n|---|---|\n| **Com cartão** (`cardId`) | Uma parcela (1x) na **fatura aberta** do período; fatura fechada/paga nunca é alterada (vai para a próxima aberta). **Não** gera despesa em conta: o débito ocorre ao pagar a fatura. Com `debtorId`, a compra nasce vinculada ao devedor. |\n| **Sem cartão, com devedor** | Fecha o ciclo da **dívida do devedor** (ver abaixo) e avança a data. |\n| **Sem cartão nem devedor** | Só avança a data; **não** gera despesa nem altera saldo (lance em [Despesas](doc:despesas) se quiser refletir). |\n\n**Anti-duplicação:** o documento de cobrança usa id determinístico (`chargeDocId`); se já existe, a cobrança é recusada, e duas chamadas concorrentes falham na segunda (regravar = update, negado pelas Rules)."
+    },
+    {
+     "id": "divida-acompanhando-a-assinatura-subscriptiondebts-js",
+     "heading": "Dívida acompanhando a assinatura (subscriptionDebts.js)",
+     "level": 2,
+     "md": "Enquanto a assinatura está **ativa** e vinculada a um devedor **sem cartão**, existe **uma** dívida lançada por ela com vencimento = `nextChargeDate`:\n\n- criar, vincular ou reativar → lança a da data atual (se ainda não existe);\n- editar data ou valor → **reagenda a mesma dívida** (servidor, `debt.reschedule`);\n- pausar, cancelar, excluir ou desvincular → **cancela** a dívida pendente (servidor, `debt.cancel`, devolvendo o emprestado).\n\nDívida **com recebimentos** nunca é alterada nem cancelada por aqui (estorne antes). Falha no lançamento automático vira **resultado**, não exceção: a assinatura já foi salva."
+    },
+    {
+     "id": "previsao",
+     "heading": "Previsão",
+     "level": 2,
+     "md": "`js/core/forecast.js` expande as ocorrências (`subscriptionOccurrences`, até 60 passos) e separa **comprometimento** (mês da cobrança) de **saída de caixa** (mês de vencimento da fatura no cartão), descartando duplicidades com despesas ou compras já lançadas. Ver [Núcleo financeiro](doc:nucleo-financeiro)."
+    }
+   ]
+  },
+  {
+   "id": "devedores",
+   "title": "Devedores, dívidas e recebimentos",
+   "category": "Funcionalidades",
+   "tags": [
+    "devedores",
+    "dívidas",
+    "parcelas",
+    "recebimento",
+    "quitação",
+    "lote",
+    "estorno"
+   ],
+   "summary": "Quem deve ao usuário — dívidas à vista e parceladas, recebimentos parciais, quitação em lote, cancelamento, reagendamento e extrato do mês.",
+   "files": [
+    "js/modules/devedores.js",
+    "js/modules/devedores-parcelas.js",
+    "js/services/debtors.js",
+    "js/services/debtPayments.js",
+    "js/core/model/debtors.js",
+    "server/finance/ops.mjs"
+   ],
+   "page": "devedores",
+   "file": "docs/playbook/funcionalidades/22-devedores.md",
+   "sections": [
+    {
+     "id": "resumo",
+     "heading": "Resumo",
+     "level": 2,
+     "md": "Rota `/devedores`. Quatro coleções trabalham juntas:\n\n| Coleção | Papel | Escrita pelo cliente |\n|---|---|---|\n| `debtors` | Devedor: `name`, `loanDate`, `lentCents` (emprestado), `receivedCents`, `status` (`open`, `paid`, `cancelled`), `archived` | Cria/edita; **`receivedCents`, `status: paid` e `archived` só pelo servidor** |\n| `debts` | **Parcelas** da dívida (`principalCents`, `dueDate`, `installmentNumber`/`installmentsTotal`, `debtGroupId`, `status`: `pending`, `paid`, `late`, `cancelled`) | Cria (sempre `pending`); **não atualiza** (pagar/cancelar é do servidor) |\n| `debtPayments` | **Recebimentos** (imutáveis) | Negado; só o servidor |\n| `cardPurchases` (com `debtorId`) | Compras no cartão vinculadas ao devedor, que também são \"a receber\" | Ver [Cartões](doc:cartoes) |\n\n**Pendente = emprestado − recebido**, derivado e nunca gravado (`js/core/model/debtors.js`). \"Atrasada\" é **exibição derivada** (pendente com vencimento passado): o status gravado só muda por recebimento ou cancelamento."
+    },
+    {
+     "id": "criar-divida-createdebtplan",
+     "heading": "Criar dívida (createDebtPlan)",
+     "level": 2,
+     "md": "À vista (`installments` = 1) ou parcelada (N) em **um lote atômico** (`commitAtomic`): parcelas mensais no mesmo dia (com ajuste ao fim do mês), valores em centavos (a 1ª leva o resto da divisão), todas com o mesmo `debtGroupId`. O total soma ao `lentCents` do devedor e um devedor **quitado é reaberto** no mesmo lote. Não movimenta conta."
+    },
+    {
+     "id": "operacoes-do-servidor",
+     "heading": "Operações do servidor",
+     "level": 2,
+     "md": "| Operação | O que faz |\n|---|---|\n| `debt.receive` | Recebe **parte ou o total** de uma parcela (de `debts` ou de uma compra de cartão) em uma conta. Recusa excesso (`EXCEEDS_REMAINING`), devedor cancelado/arquivado e parcela já quitada. Aumenta o saldo da conta e o `receivedCents`. |\n| `debt.settleBatch` | **Quitação em lote** retomável (por mês, por dívida ou todas), até 500 itens: uma transação **por parcela**, com documento de lote em `batches` e estado explícito; interrompido, retoma. |\n| `debt.cancel`, `debt.cancelMany` | Cancela parcela(s) pendente(s) **sem recebimentos** e devolve o valor ao emprestado; `cancelMany` é **tudo ou nada** em uma transação. |\n| `debt.reschedule` | Reagenda e/ou reajusta o valor de **uma** parcela sem recebimentos, ajustando `lentCents`. Usada pelas [Assinaturas](doc:assinaturas). |\n| `debtor.archive`, `debtor.unarchive` | Arquivamento lógico (preserva histórico). |\n| `debtor.delete` | Só **sem histórico** de dívidas/recebimentos. |\n| `reversal.create` (kind `debtPayment`) | Estorna um recebimento. |\n\nIdempotência por `operationId` em todas; o lote usa uma chave por item."
+    },
+    {
+     "id": "tela",
+     "heading": "Tela",
+     "level": 2,
+     "md": "`devedores.js` lista e edita devedores (com **fechamento do mês**: por devedor, as compras, parcelas e recebimentos do mês via `loadDebtorStatements`, em lotes de 30 devedores). `devedores-parcelas.js` é o modal de parcelas e recebimentos: registrar recebimento (parcial), quitar mês, cancelar várias, estornar."
+    },
+    {
+     "id": "armadilhas",
+     "heading": "Armadilhas",
+     "level": 2,
+     "md": "- Cancelar para menos precisa devolver ao `lentCents`; o emprestado **nunca** pode ficar abaixo do já recebido.\n- Recebimento em parcela de compra no cartão é independente do pagamento da fatura (fluxos separados).\n- Conta de destino precisa estar ativa."
+    }
+   ]
+  },
+  {
+   "id": "metas",
+   "title": "Metas",
+   "category": "Funcionalidades",
+   "tags": [
+    "metas",
+    "aporte",
+    "resgate",
+    "progresso",
+    "conta vinculada"
+   ],
+   "summary": "Metas de poupança com prazo; valor guardado derivado de aportes e resgates feitos pelo servidor; metas vinculadas a uma conta.",
+   "files": [
+    "js/modules/metas.js",
+    "js/services/goals.js",
+    "js/core/model/goals.js",
+    "server/finance/ops.mjs"
+   ],
+   "page": "metas",
+   "file": "docs/playbook/funcionalidades/23-metas.md",
+   "sections": [
+    {
+     "id": "resumo",
+     "heading": "Resumo",
+     "level": 2,
+     "md": "Rota `/metas`. Coleções `goals` (`name`, `description`, `targetCents`, `deadline`, `accountId`, `status`: `active`, `completed`, `cancelled`) e `goalTransactions` (aportes e resgates, **só pelo servidor**).\n\n- **Valor guardado é derivado:** aportes − resgates, excluindo os estornados (`goalSavedCents`, `js/core/model/goals.js`). Progresso e restante também.\n- **Aportar/resgatar:** `goal.deposit` / `goal.withdraw` (servidor). O aporte **debita** a conta (checa saldo); o resgate **credita**. A meta vira `completed` ao atingir o alvo e é reativada ao resgatar abaixo dele; `completed` só nasce de aportes. Mesma transação do movimento.\n- **Meta vinculada a uma conta** (`accountId`): o progresso **segue o saldo dessa conta** (`allocateLinkedGoalBalances`); aporte/resgate manual é recusado (\"transfira para a conta\").\n- **Editar:** só meta **ativa**; o novo alvo precisa ser **maior** que o já guardado.\n- **Excluir:** bloqueado se houver movimentações (fail-closed); **cancele** para manter o histórico.\n- Movimentos de meta são **imutáveis**; correção = estorno (`reversal.create`, kind `goalTransaction`).\n- A tela de [Transferências](doc:transferencias) também faz aporte e resgate pela opção \"Meta: …\"."
+    }
+   ]
+  },
+  {
+   "id": "cartoes",
+   "title": "Cartões, compras e faturas",
+   "category": "Funcionalidades",
+   "tags": [
+    "cartões",
+    "faturas",
+    "compras",
+    "parcelas",
+    "limite",
+    "fechamento",
+    "pagamento"
+   ],
+   "summary": "Cartões de crédito, compras à vista e parceladas, ciclo da fatura (aberta → fechada → paga), limite derivado e pagamento pelo servidor.",
+   "files": [
+    "js/modules/cartoes.js",
+    "js/services/creditCards.js",
+    "js/core/model/cards.js",
+    "server/finance/ops.mjs"
+   ],
+   "page": "cartoes",
+   "file": "docs/playbook/funcionalidades/24-cartoes.md",
+   "sections": [
+    {
+     "id": "resumo",
+     "heading": "Resumo",
+     "level": 2,
+     "md": "Rota `/cartoes`. Três coleções: `creditCards` (`name`, `brand`, `limitCents`, `closingDay`, `dueDay`, `accountId`, `color`, `status`: `active`, `blocked`, `cancelled`), `cardPurchases` e `invoices`."
+    },
+    {
+     "id": "compras",
+     "heading": "Compras",
+     "level": 2,
+     "md": "- Compra **parcelada** = **N documentos** `cardPurchases` (1 a 48 parcelas): o valor é dividido em centavos inteiros (o **resto vai na 1ª**) e cada parcela é ligada à fatura do **seu mês** (`splitInstallments`, `js/core/model/cards.js`).\n- **Ciclo:** compra **após o dia de fechamento** vai para a fatura seguinte; faturas não abertas são puladas.\n- As faturas ausentes são criadas **antes**, em um lote próprio, com **id determinístico** `${cardId}_${AAAA-MM}`; só então as parcelas vão em **outro lote**. Motivo: `exists()` das Rules não enxerga documentos do mesmo lote. Consequência: falha no segundo lote deixa faturas abertas vazias, que são reaproveitadas.\n- **Limite usado/disponível** e total de fatura **aberta** são derivados (`cardLimitUsage`); o `totalCents` só é gravado no fechamento.\n- Compra lançada é **imutável** pelas Rules (valor, devedor e fatura não mudam); `updateCardPurchase`/`deleteCardPurchase` seguem as restrições do service. Compra de **devedor** só é excluída por administrador ou depois que o devedor foi removido; compra de fatura **fechada/paga** também não é apagada.\n- **Consolidado:** `registerInvoiceConsolidation` lança uma parcela (1x) que representa os gastos do mês sem cadastrar compra a compra, só em fatura aberta ou inexistente.\n- Compras podem ter `categoryId` (opcional) e `debtorId` (vínculo com devedor; ver [Devedores](doc:devedores))."
+    },
+    {
+     "id": "fatura",
+     "heading": "Fatura",
+     "level": 2,
+     "md": "`open` → `closed` → `paid`; também `cancelled`.\n\n| Ação | Quem faz | Detalhe |\n|---|---|---|\n| **Fechar** (`closeInvoice`) | Cliente | Só a partir do dia de fechamento; grava `totalCents` (soma das parcelas). |\n| **Pagar** (`payInvoice` → `invoice.pay`) | **Servidor** | Pagamento **integral**, de fatura `open` ou `closed`, **com uma conta ativa**: recalcula o total das compras **dentro da transação** (o `totalCents` gravado nunca é confiável), checa saldo, marca `paid` e debita a conta **uma vez**. Fatura zerada não é paga. |\n| **Cancelar** (`cancelInvoice`) | Cliente | Só fatura aberta **sem compras**. |\n| Excluir | Cliente/admin | Fatura paga não é apagada pelo dono enquanto o cartão existir ou se foi estornada. |\n| Estornar pagamento | Servidor (`reversal.create`, kind `invoice`) | Devolve o valor à conta. |\n\nCompras do cartão **não são despesas** e não reduzem o saldo: o saldo da conta só muda quando a fatura é paga (sem dupla contagem)."
+    },
+    {
+     "id": "armadilhas",
+     "heading": "Armadilhas",
+     "level": 2,
+     "md": "- O **comentário do topo** de `js/services/creditCards.js` e o cabeçalho de `js/modules/cartoes.js` estão **desatualizados**: ainda dizem que pagar a fatura não movimenta conta. Vale o comportamento acima (`payInvoice`/`invoice.pay`, VF-2-03p/VF-ARQ-02).\n- Sem transação no cliente: compras simultâneas podem estourar o limite (limitação conhecida).\n- Pagamento parcial de fatura não existe.\n- Assinaturas no cartão entram como parcela 1x na fatura aberta ([Assinaturas](doc:assinaturas))."
+    }
+   ]
+  },
+  {
+   "id": "relatorios",
+   "title": "Relatórios",
+   "category": "Funcionalidades",
+   "tags": [
+    "relatórios",
+    "período",
+    "categoria",
+    "csv",
+    "realizado"
+   ],
+   "summary": "Receitas × despesas realizadas por mês e totais por categoria, até 24 meses, com exportação CSV gerada no navegador.",
+   "files": [
+    "js/modules/relatorios.js",
+    "js/services/reports.js",
+    "js/core/aggregates.js",
+    "js/utils/csv.js"
+   ],
+   "page": "relatorios",
+   "file": "docs/playbook/funcionalidades/25-relatorios.md",
+   "sections": [
+    {
+     "id": "resumo",
+     "heading": "Resumo",
+     "level": 2,
+     "md": "Rota `/relatorios`. **Somente leitura.**\n\n- **Período** em meses `[de, até]`, **máximo 24** (`MAX_REPORT_MONTHS`, `validatePeriod`). Lê só o intervalo (`receivedDate`/`paidDate`) com teto `REPORT_READ_LIMIT` = 2000 por coleção.\n- **Realizado** = receitas `received` e despesas `paid`. Mostra, por mês, receitas × despesas e, por categoria, os totais.\n- **Exportação CSV** gerada no cliente, sem bibliotecas (`js/utils/csv.js`): separador `;`, BOM para o Excel, CRLF. Campos de texto que começam com `=`, `+`, `-`, `@`, tab ou CR recebem um apóstrofo (**neutralização de injeção de fórmula**); números (inclusive negativos) ficam intactos.\n- Se o teto for atingido, o resultado vem com aviso de truncamento."
+    }
+   ]
+  },
+  {
+   "id": "manutencao-dados",
+   "title": "Manutenção de dados",
+   "category": "Funcionalidades",
+   "tags": [
+    "manutenção",
+    "limpeza",
+    "importação",
+    "exportação",
+    "csv",
+    "massa de testes",
+    "backup"
+   ],
+   "summary": "Limpeza dos próprios dados, massa de testes e importação/exportação CSV com simulação; escopos administrativos aparecem só para administradores.",
+   "files": [
+    "js/modules/manutencao-dados.js",
+    "js/services/maintenance.js",
+    "js/services/importer.js",
+    "js/core/importSchema.js",
+    "js/services/seed.js",
+    "js/utils/maintenance-config.js",
+    "js/utils/zip.js"
+   ],
+   "page": "manutencao-dados",
+   "file": "docs/playbook/funcionalidades/26-manutencao-dados.md",
+   "sections": [
+    {
+     "id": "resumo",
+     "heading": "Resumo",
+     "level": 2,
+     "md": "Rota `/manutencao-dados`, **fora do menu** (atalho em *Configurações*). **Qualquer usuário autenticado** abre a página; o que cada um pode fazer é decidido por **escopo**, e a barreira real são as Rules e o servidor."
+    },
+    {
+     "id": "limpeza",
+     "heading": "Limpeza",
+     "level": 2,
+     "md": "| Escopo | Quem | Como |\n|---|---|---|\n| **Meus dados** (`own`) | qualquer usuário | `clearOwnData` chama a operação do servidor `data.clearOwn` (frase `APAGAR MEUS DADOS` enviada ao servidor; na tela é digitada a frase de confirmação). **Exige login recente** (≤ 5 min). Apaga em ordem de dependência (`CLEAR_ORDER`) e **preserva** o `auditLog` e as `operations`. |\n| **Usuário específico** (`target_uid`) | **admin** | Lê e apaga documentos de outro uid, sem entrar na conta (`clearUserData`), sem tocar `auditLog` alheio. |\n| **Banco inteiro** (`all_users`) | **admin** | Consulta de grupo nas coleções de domínio de todos os usuários. |\n\nToda ação destrutiva exige **frase digitada** (`CONFIRM_PHRASES` em `js/utils/maintenance-config.js`: `LIMPAR USUARIO ALVO`, `LIMPAR BANCO INTEIRO`, `RESETAR E GERAR`, `PROMOVER ADMIN`, `REVOGAR ADMIN`…), em lotes de até 500 operações. Escopos administrativos são **escondidos** de não-admin na tela, mas a proteção real são as Rules (`isAdmin()`)."
+    },
+    {
+     "id": "massa-de-testes",
+     "heading": "Massa de testes",
+     "level": 2,
+     "md": "`seedFullTestSuite` (`js/services/seed.js`) popula **o usuário autenticado** com um pacote completo de cenários usando os **próprios services do app** (Rules, centavos, auditoria). Datas relativas a hoje; nomes começam com \"Teste\". `volume` (1–20) multiplica receitas e despesas. **Resetar + Gerar** limpa e popula.\n\n> Existe também a **Central de validação** (admin), que é outra coisa: ver [Administração](doc:administracao)."
+    },
+    {
+     "id": "importacao-e-exportacao-csv",
+     "heading": "Importação e exportação CSV",
+     "level": 2,
+     "md": "Fluxo em **duas etapas** (`js/services/importer.js`):\n\n1. **`dryRunImport`** lê o CSV (uma entidade **ou** o CSV unificado `todas`), resolve referências **por nome** e valida **tudo sem gravar**, classificando cada linha: nova, a mesclar (`merge`), duplicada ou com erro. Entidades são processadas em **ordem de dependência** (`IMPORT_ORDER`: contas → categorias → cartões → devedores → receitas, despesas, transferências, assinaturas, metas, dívidas, compras de cartão), então o arquivo pode vir fora de ordem. Máximo **500 linhas** por importação (`MAX_IMPORT_ROWS`).\n2. **`applyImport`** grava pelos **services** do app (portanto com Rules, centavos inteiros e auditoria), grupo a grupo, relendo a base antes de cada grupo. É **idempotente**: `IMPORT_IDENTITY` define a chave determinística de cada entidade (por exemplo, conta = `instituição|nome`; receita = `descrição|valor|data|conta`) e evita duplicar ao reimportar; o relatório mostra criados, atualizados, ignorados e falhas.\n\nEsquema (colunas em português, campos do modelo, resolução de referências): `js/core/importSchema.js` — **puro**; `mapImportRow` valida como o service. Mudou um campo do modelo? Atualize aqui também.\n\n**Exportação:** modelo CSV vazio, CSV da base atual por entidade, CSV unificado e **ZIP com todas as entidades** (`exportAllCsv`, `js/utils/zip.js`, sem bibliotecas). É o **único backup** disponível no Spark: exporte antes de limpezas."
+    },
+    {
+     "id": "armadilhas",
+     "heading": "Armadilhas",
+     "level": 2,
+     "md": "- Importar não cria movimentos **liquidados** por fora das regras: receitas e despesas entram pelos services (e, portanto, pelo servidor).\n- `clearOwnData` precisa de sessão recente: sessão antiga recebe 403 `RECENT_LOGIN_REQUIRED`.\n- O `auditLog` do próprio usuário sobrevive à limpeza (é create-only)."
+    }
+   ]
+  },
+  {
+   "id": "administracao",
+   "title": "Administração (administradores e Central de validação)",
+   "category": "Funcionalidades",
+   "tags": [
+    "administração",
+    "admin",
+    "claims",
+    "central de validação",
+    "auditoria",
+    "demonstração"
+   ],
+   "summary": "Promover/revogar administradores, listar usuários e a Central de validação (dados de demonstração, auditoria funcional e limpeza), todos protegidos pela claim admin.",
+   "files": [
+    "server/admin/claims.mjs",
+    "api/admin-claims.mjs",
+    "js/services/adminClaims.js",
+    "server/validation/center.mjs",
+    "api/validation.mjs",
+    "js/services/validationCenter.js",
+    "js/modules/manutencao-dados.js"
+   ],
+   "page": "",
+   "file": "docs/playbook/funcionalidades/27-administracao.md",
+   "sections": [
+    {
+     "id": "resumo",
+     "heading": "Resumo",
+     "level": 2,
+     "md": "Duas áreas só para **administradores** (claim `admin === true`), exibidas dentro de *Manutenção de dados* ([Manutenção de dados](doc:manutencao-dados)). Os endpoints validam a autorização **no servidor**; a tela apenas esconde."
+    },
+    {
+     "id": "administradores-api-admin-claims",
+     "heading": "Administradores (/api/admin-claims)",
+     "level": 2,
+     "md": "- **`GET`** lista usuários (paginado, até 5.000), com indicador `admin`, e-mail e se está desativado. **`POST`** promove ou revoga: corpo `{ target (uid ou e-mail), admin: true|false }`. Preserva as demais claims e **impede a auto-revogação**.\n- **Autorização** (`authorizeAdmin`, `server/admin/claims.mjs:203`): (1) ID token verificado **localmente** com as chaves públicas do Google (`verifyFirebaseIdToken`, RS256, confere `iss`, `aud`, `exp`, `sub`) — **não** usa a chave de API web (ela é restrita por referenciador e chamadas de servidor não enviam `Referer`; foi a causa de um 401 antigo); (2) credencial do servidor (service account → token OAuth2); (3) estado **atual** do chamador em `accounts:lookup` (`admin === true`, conta ativa).\n- **Erros distintos:** token inválido = 401; não-admin = 403; sem `FIREBASE_SERVICE_ACCOUNT` = 501; formato inválido = 500; Google recusou a credencial = 502. Logs `admin_claims_rejected` trazem só códigos e motivos.\n- A claim vale para o usuário só após **novo login** (ou renovar o token).\n- Cliente: `js/services/adminClaims.js` (`setAdminClaim`, `listAdminUsers`); a ação é registrada no `auditLog` do executor.\n- O **primeiro administrador** é definido fora do app (ver [Runbooks](doc:runbooks#promover-ou-revogar-um-administrador))."
+    },
+    {
+     "id": "central-de-validacao-api-validation",
+     "heading": "Central de validação (/api/validation)",
+     "level": 2,
+     "md": "Isolada de `/api/finance` e de `/api/admin-claims`. Quatro recursos (campo `op`):\n\n| `op` | O que faz |\n|---|---|\n| `status` | Informa se há dados de demonstração e quantos. |\n| `seed` | Popula a conta do administrador com **dados de demonstração**: ids `demo_*`, rótulos `[DEMO]`, e um **manifesto** `demoSeeds/current` listando o que foi criado (`buildDemoSeed`). Frase `POPULAR DEMONSTRACAO`. |\n| `audit` | Executa a **auditoria funcional automatizada** sobre a base de demonstração (operações reais do servidor contra contas `demo_*`), **prova** que nenhum dado real foi alterado e remove os artefatos (`operationId` `demoaud-*`). |\n| `cleanup` | Remove **somente** o que o manifesto lista (e só ids `demo_*`) e os artefatos da auditoria. **Sem manifesto, nada é apagado.** Frase `REMOVER DEMONSTRACAO`. |\n\nAutorização em camadas a cada chamada: ID token (Admin SDK) + `admin` **no token** + `admin` **atual** da conta (`getUser`). Cliente: `js/services/validationCenter.js`. A auditoria usa `js/core/integrity.js` (ver [Núcleo financeiro](doc:nucleo-financeiro))."
+    },
+    {
+     "id": "armadilhas",
+     "heading": "Armadilhas",
+     "level": 2,
+     "md": "- A Central **grava** na conta do administrador (dados `demo_*`); `cleanup` é o caminho de volta.\n- `demoSeeds` não está nas Rules do cliente: só o servidor grava e lê."
+    }
+   ]
+  },
+  {
+   "id": "playbook-pagina",
+   "title": "Playbook (esta página)",
+   "category": "Funcionalidades",
+   "tags": [
+    "playbook",
+    "documentação",
+    "busca",
+    "admin"
+   ],
+   "summary": "A página de documentação interna: acesso só de administrador, busca, filtros, sumário e links por seção.",
+   "files": [
+    "pages/playbook.html",
+    "js/modules/playbook.js",
+    "js/services/playbook.js",
+    "js/utils/markdown.js",
+    "js/utils/playbookSearch.js",
+    "css/playbook.css",
+    "api/docs.mjs",
+    "server/docs/playbook.mjs"
+   ],
+   "page": "playbook",
+   "file": "docs/playbook/funcionalidades/28-playbook-pagina.md",
+   "sections": [
+    {
+     "id": "resumo",
+     "heading": "Resumo",
+     "level": 2,
+     "md": "Rota `/playbook`, **fora do menu**; o link aparece em *Configurações* para administradores."
+    },
+    {
+     "id": "uso",
+     "heading": "Uso",
+     "level": 2,
+     "md": "- **Busca:** caixa no topo do sumário (atalho `/`, `Esc` limpa). Todos os termos precisam aparecer; ignora acentos e maiúsculas; o título e as tags pesam mais que o corpo; arquivos citados também são pesquisáveis. Resultados mostram trecho com termos **realçados**.\n- **Filtros:** categoria (lista suspensa) e tags (chips). Sem texto, o filtro lista os documentos.\n- **Navegação:** sumário por categoria, \"nesta página\" dentro de cada documento, e links `doc:` entre fichas. O endereço guarda a posição (`#doc/<id>/<seção>`), então o botão voltar funciona e dá para compartilhar.\n- **Copiar:** cada bloco de código tem um botão **Copiar**.\n- No celular o sumário some: use a busca e a página inicial (cartões por categoria)."
+    },
+    {
+     "id": "como-funciona",
+     "heading": "Como funciona",
+     "level": 2,
+     "md": "Detalhes de acesso, atualização automática e como escrever fichas: [Atualização automática](doc:atualizacao-automatica). Em resumo: `js/modules/playbook.js` confere a claim `admin`, pede `GET /api/docs` (que revalida o administrador no servidor), indexa o JSON no navegador (`js/utils/playbookSearch.js`) e renderiza o Markdown como tokens com `textContent` (`js/utils/markdown.js`), **sem `innerHTML`**."
+    }
+   ]
+  },
+  {
+   "id": "testes",
+   "title": "Testes",
+   "category": "Testes",
+   "tags": [
+    "testes",
+    "rules",
+    "integração",
+    "e2e",
+    "emulador",
+    "lint",
+    "ci"
+   ],
+   "summary": "Pirâmide de testes, comandos, requisitos, o que cada suíte garante, como escrever testes novos e armadilhas.",
+   "files": [
+    "package.json",
+    "scripts/lint.mjs",
+    "tests/model",
+    "tests/services",
+    "tests/rules/firestore.rules.test.mjs",
+    "tests/integration",
+    "tests/e2e/harness.mjs",
+    ".github/workflows/ci.yml"
+   ],
+   "page": "",
+   "file": "docs/playbook/40-testes.md",
+   "sections": [
+    {
+     "id": "piramide",
+     "heading": "Pirâmide",
+     "level": 2,
+     "md": "| Suíte | Comando | Onde | Precisa de |\n|---|---|---|---|\n| **Lint** | `npm run lint` | `scripts/lint.mjs` | Node |\n| **Unitários** (modelo + services + servidor sem banco + playbook) | `npm run test:unit` | `tests/model/`, `tests/services/` | Node 24+ |\n| **Rules** (Security Rules no emulador) | `npm run test:rules` | `tests/rules/firestore.rules.test.mjs` | Node 24+ e **Java 11+** (emulador do Firestore) |\n| **Integração** (servidor real + emulador, concorrência) | `npm run test:integration` | `tests/integration/` | Node, Java |\n| **E2E** (navegador, Playwright, contra emuladores) | `npm run test:e2e` | `tests/e2e/` | Node, Java e `playwright` instalado no ambiente |\n\n`npm test` roda unitários + Rules. Os números de arquivos por pasta estão em [Referência gerada](doc:referencia-gerada) (não fixe contagens de testes em documentos: mudam toda semana)."
+    },
+    {
+     "id": "lint-scripts-lint-mjs",
+     "heading": "Lint (scripts/lint.mjs)",
+     "level": 2,
+     "md": "Sem dependências. Verifica: sintaxe de todo `.js`/`.mjs` (`node --check`), sem tabs nem espaço no fim da linha, arquivo termina com uma quebra de linha, **proíbe `console.log`** (use `console.info/warn/error`), `debugger`, `eval(`, marcadores de merge e `.only(`, imports nomeados não usados, e JSON válido (`package.json`, `firebase.json`, `firestore.indexes.json`, `vercel.json`)."
+    },
+    {
+     "id": "unitarios",
+     "heading": "Unitários",
+     "level": 2,
+     "md": "- Usam `node:test` e `node:assert/strict`. Rodam em Node puro: por isso `core` e `utils` não podem importar DOM nem Firebase.\n- Services recebem `io`/`deps` injetáveis. Há um repositório em memória em `tests/services/helpers/memory-store.mjs`.\n- O servidor sem banco é testado injetando `db`, `verifyIdToken`, `now`, `log` em `handleFinance` (`tests/services/server-core.test.mjs`, `security-hardening.test.mjs`).\n- **Testes que protegem a consistência do projeto** (falham se você esquecer algo):\n  - `routes.test.mjs`: menu ↔ página HTML ↔ rewrite ↔ módulo em `app.js`; sem script inline nas páginas.\n  - `security-headers.test.mjs`: hash CSP do import map, SRI do `lucide` e dos módulos Firebase.\n  - `model-structure.test.mjs`: lista de exports do barrel `js/core/model.js`.\n  - `playbook.test.mjs`: o playbook gerado está em dia e toda página, coleção, operação e variável de ambiente está documentada.\n  - `security-hardening.test.mjs`: o servidor carrega **sem** `require()` de módulo ESM (regressão do `ERR_REQUIRE_ESM`)."
+    },
+    {
+     "id": "rules-tests-rules",
+     "heading": "Rules (tests/rules/)",
+     "level": 2,
+     "md": "Usam `@firebase/rules-unit-testing` e o emulador do Firestore (`firebase emulators:exec`). Cobrem: negação sem autenticação, isolamento entre usuários, valores monetários, schemas fechados, privilégios do administrador, `auditLog` imutável, perfil/configurações e cada coleção de domínio. **Toda mudança em `firestore.rules` precisa de um caso aqui.** Como o teste roda contra o arquivo do repositório, ele **não** prova o que está publicado no Firebase: após publicar, confirme no console."
+    },
+    {
+     "id": "integracao-tests-integration",
+     "heading": "Integração (tests/integration/)",
+     "level": 2,
+     "md": "Servidor real (`handleFinance`, `handleValidation`) com o Admin SDK contra o **emulador**, clientes **simultâneos**, e um oráculo independente (`oracleBalance`) que recalcula saldos por fora. Cenários: duas transferências com saldo para uma, transferência × despesa, recebimentos parciais em paralelo, retry idempotente, estornos duplicados, falha entre débito e crédito (rollback), isolamento por usuário e autenticação com **token real** do Auth Emulator. Helpers em `tests/integration/helpers/` (`server.mjs`, `real-io.mjs`, `world.mjs`). Rodam com `--test-concurrency=1`: levam vários minutos (≈ 20 min de CPU acumulada). Rode em background e leia o final."
+    },
+    {
+     "id": "e2e-tests-e2e",
+     "heading": "E2E (tests/e2e/)",
+     "level": 2,
+     "md": "`harness.mjs` sobe um servidor estático + `/api/finance` (o mesmo handler da Vercel) e controla o Chromium via Playwright. O SDK do Firebase é servido do `node_modules/firebase` local (versão pode diferir da fixada no import map; a chave `integrity` é removida **só no harness**). Cenários: login/cadastro e troca de senha (`auth.mjs`), fluxos principais (`flows.mjs`), movimentos, devedores, manutenção, Central de validação, CSV, estornos e visibilidade, todas as páginas, tabelas, responsividade, confirmações, edição de compra no cartão e campos de data. **Não rodam no CI** (exigem navegador). Se `playwright` não existir, os scripts saem com aviso."
+    },
+    {
+     "id": "como-escrever-um-teste-novo",
+     "heading": "Como escrever um teste novo",
+     "level": 2,
+     "md": "1. Lógica pura (`core`, `utils`): arquivo em `tests/model/` ou `tests/services/`, sem emulador.\n2. Service: injete `io` com falsos; teste os caminhos de erro e a mensagem ao usuário.\n3. Operação de servidor: caso rápido em `tests/services/` (recusas antes do banco) **e** um caso de integração se envolver saldo, transação ou concorrência.\n4. Rules: caso em `tests/rules/` (permitido **e** negado).\n5. Tela: cenário E2E só para fluxos de ponta a ponta; o restante cabe em unitários."
+    },
+    {
+     "id": "armadilhas",
+     "heading": "Armadilhas",
+     "level": 2,
+     "md": "- O Node local pode ser mais novo que o da Vercel e **aceitar** coisas que lá quebram (ex.: `require()` de ESM). O teste `security-hardening.test.mjs` cobre esse caso; **valide mudanças de dependência do servidor em preview**.\n- Emuladores e `firebase emulators:exec` falam IPv6 e podem avisar sobre `::1`; é inofensivo.\n- A mensagem de erro de um E2E que falha costuma citar o texto esperado: se a copy mudou (ex.: \"ao menos 10\"), atualize o teste.\n- O teste do playbook falha se um arquivo gerado estiver defasado: rode `npm run docs:build` e comite (ver [Atualização automática](doc:atualizacao-automatica))."
+    }
+   ]
+  },
+  {
+   "id": "runbooks",
+   "title": "Runbooks",
+   "category": "Runbooks",
+   "tags": [
+    "runbook",
+    "procedimento",
+    "deploy",
+    "rules",
+    "admin",
+    "erro",
+    "cota",
+    "firebase-admin",
+    "sdk"
+   ],
+   "summary": "Passo a passo de tarefas recorrentes e de diagnóstico — publicar Rules, promover admin, atualizar SDK e firebase-admin, erro 500, cota, adicionar página, coleção e operação.",
+   "files": [
+    "scripts/dev-server.mjs",
+    "js/importmap.js",
+    "vercel.json",
+    "server/finance/core.mjs",
+    "server/finance/ops.mjs",
+    "js/core/model/schemas.js",
+    "firestore.rules"
+   ],
+   "page": "",
+   "file": "docs/playbook/50-runbooks.md",
+   "sections": [
+    {
+     "id": "resumo",
+     "heading": "Resumo",
+     "level": 2,
+     "md": "Cada seção é um procedimento independente. Antes de agir em produção, leia [Operação e deploy](doc:operacao-deploy)."
+    },
+    {
+     "id": "publicar-as-security-rules",
+     "heading": "Publicar as Security Rules",
+     "level": 2,
+     "md": "1. Edite `firestore.rules` **e** adicione o caso em `tests/rules/firestore.rules.test.mjs`.\n2. `npm run test:rules` (precisa de Java). Tudo verde.\n3. Com autorização: `npx firebase deploy --only firestore:rules --project vault-finance-d1603` (ou colar no console).\n4. Entre no app e faça uma receita, uma despesa e uma transferência. Se algo falhar, volte a versão anterior no console (*Firestore → Regras → histórico*).\n\nO deploy publica o arquivo **inteiro**: se houver mudanças antigas não publicadas, elas vão junto."
+    },
+    {
+     "id": "promover-ou-revogar-um-administrador",
+     "heading": "Promover ou revogar um administrador",
+     "level": 2,
+     "md": "**Pelo app** (quem já é admin): *Manutenção de dados* → seção de administradores → informar e-mail ou uid → digitar a frase (`PROMOVER ADMIN` / `REVOGAR ADMIN`). Chama `POST /api/admin-claims`. Não é possível revogar a **própria** claim. A pessoa precisa **sair e entrar de novo** (ou renovar o token) para a claim valer; o token atual pode levar até 1 h para expirar.\n\n**O primeiro administrador** não pode ser criado pelo app. Defina pela service account, fora do repositório:\n\n```javascript\n// Rode localmente, com a service account em FIREBASE_SERVICE_ACCOUNT (JSON). Nunca comite este script.\nimport { initializeApp, cert } from 'firebase-admin/app';\nimport { getAuth } from 'firebase-admin/auth';\ninitializeApp({ credential: cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)) });\nawait getAuth().setCustomUserClaims('<uid>', { admin: true });\n```"
+    },
+    {
+     "id": "verificar-o-e-mail-e-ligar-require-verified-email",
+     "heading": "Verificar o e-mail e ligar REQUIRE_VERIFIED_EMAIL",
+     "level": 2,
+     "md": "1. Entre como o usuário em *Configurações → Segurança — e-mail* → **Enviar e-mail de verificação**.\n2. Abra o link do e-mail e volte ao app → **Já verifiquei** (renova o token).\n3. Só depois de **todas** as contas ativas estarem verificadas, crie `REQUIRE_VERIFIED_EMAIL=true` na Vercel e refaça o deploy. Antes disso, as operações financeiras das contas não verificadas dão 403."
+    },
+    {
+     "id": "atualizar-o-sdk-do-firebase-cdn",
+     "heading": "Atualizar o SDK do Firebase (CDN)",
+     "level": 2,
+     "md": "O SDK vem do `gstatic.com` pelo import map de `js/importmap.js` (`FIREBASE_VERSION`).\n\n1. Altere `FIREBASE_VERSION` em `js/importmap.js` e a versão `firebase` em `package.json` (devDependency).\n2. Recalcule os hashes SHA-384 dos arquivos do pacote npm `firebase@<versão>`: `firebase-app.js`, `firebase-auth.js`, `firebase-firestore.js` e `firebase-app-check.js`:\n```bash\nopenssl dgst -sha384 -binary <arquivo> | openssl base64 -A\n```\n3. Atualize o `integrity` de cada módulo em `js/importmap.js` e o **hash `sha256` do import map** no `script-src` de `vercel.json` (o teste `tests/services/security-headers.test.mjs` imprime o valor esperado).\n4. `npm run lint && npm run test:unit`, abra um **preview** e confira o console do navegador (sem erro de CSP/SRI)."
+    },
+    {
+     "id": "atualizar-o-firebase-admin",
+     "heading": "Atualizar o firebase-admin",
+     "level": 2,
+     "md": "O `firebase-admin` 14 **quebrou** `/api/finance` na Vercel com `ERR_REQUIRE_ESM` (`jwks-rsa` → `jose`, módulo só-ESM); local passava porque o Node recente aceita `require()` de ESM. O projeto está na **13.10**.\n\n1. Atualize em um commit isolado na `claude-dev`.\n2. `npm ls jwks-rsa jose` e `npm audit --omit=dev`.\n3. `npm run test:unit` (o teste de `security-hardening` importa o servidor com `--no-experimental-require-module`) e `npm run test:integration`.\n4. **Valide no preview da Vercel** (criar receita, despesa, transferência) **antes** de levar para `main`."
+    },
+    {
+     "id": "diagnosticar-erro-em-api",
+     "heading": "Diagnosticar erro em /api/*",
+     "level": 2,
+     "md": "1. Reproduza e **na hora** abra os logs de runtime do projeto na Vercel (Hobby guarda 1 h). Filtre por `/api/finance`.\n2. Interprete o código de resposta:\n\n| Status / `error` | Causa provável | Ação |\n|---|---|---|\n| 401 `UNAUTHENTICATED` / `INVALID_TOKEN` | Token ausente, expirado ou **revogado** | Entrar de novo |\n| 403 `RECENT_LOGIN_REQUIRED` | `data.clearOwn` com login antigo (> 5 min) | Sair e entrar |\n| 403 `EMAIL_NOT_VERIFIED` | `REQUIRE_VERIFIED_EMAIL` ligada | Verificar e-mail em Configurações |\n| 400 `FORBIDDEN_PARAM`, `INVALID_*` | Parâmetro inválido ou proibido | Corrigir o cliente |\n| 409 `INSUFFICIENT_BALANCE`, `INVALID_STATE`, `OPERATION_ID_REUSED` | Regra de negócio / chave reutilizada | Mensagem ao usuário |\n| 429 | Limite de 30 req/min por IP do Firewall | Aguardar; revisar a regra se atrapalhar |\n| 501 `SERVER_NOT_CONFIGURED` / `not_configured` | Falta `FIREBASE_SERVICE_ACCOUNT` no ambiente | Criar a variável e refazer o deploy |\n| 500 `bad_service_account` | Valor inválido da service account | Recolar o JSON |\n| 500 `EMULATOR_IN_PRODUCTION` | Variável de emulador no ambiente | Removê-la na Vercel |\n| 500 `HISTORY_TOO_LARGE` | Histórico acima do limite verificável (5000) | Arquivar período antigo |\n| 500 (sem código) com `ERR_REQUIRE_ESM` nos logs | Dependência só-ESM carregada por `require()` | Reverter a dependência (ver acima) |\n| 502 `server_credential_failed` | O Google recusou a credencial | Conferir chave/projeto |\n| 503 `TEMPORARILY_UNAVAILABLE` | Contenção transitória | O cliente repete com o **mesmo** `operationId` |"
+    },
+    {
+     "id": "cota-do-firestore-estourou",
+     "heading": "Cota do Firestore estourou",
+     "level": 2,
+     "md": "Sintoma: leituras/escritas falham até o dia seguinte. Veja *Firestore → Uso*. Se o consumo não é seu: revise o Firewall (rate limit), as restrições da chave web e a lista de usuários em *Authentication*; considere reabrir o App Check (ver [Segurança](doc:seguranca)). Se é legítimo, reduza leituras (tetos `READ_LIMIT`, paginação) ou avalie o plano."
+    },
+    {
+     "id": "usuario-nao-consegue-entrar",
+     "heading": "Usuário não consegue entrar",
+     "level": 2,
+     "md": "1. **Senha curta:** com a política \"Exigir\", senhas < 10 só entram após **redefinir por e-mail** (\"Esqueci a senha\").\n2. **Conta desativada:** *Authentication → Usuários*.\n3. **Token revogado:** sair e entrar de novo.\n4. **E-mail não verificado:** o login funciona; só as operações do servidor ficam bloqueadas (se `REQUIRE_VERIFIED_EMAIL`)."
+    },
+    {
+     "id": "girar-a-service-account",
+     "heading": "Girar a service account",
+     "level": 2,
+     "md": "1. Google Cloud → IAM → Contas de serviço → crie uma chave nova (JSON) da conta `firebase-adminsdk-…`.\n2. Atualize `FIREBASE_SERVICE_ACCOUNT` na Vercel e refaça o deploy; teste uma operação.\n3. **Apague a chave antiga.** Nunca cole a chave em chat, issue ou commit."
+    },
+    {
+     "id": "reverter-um-deploy",
+     "heading": "Reverter um deploy",
+     "level": 2,
+     "md": "- **Rápido (produção):** Vercel → *Deployments* → deploy anterior \"Ready\" → *Promote to Production*.\n- **No código:** `git revert` na `claude-dev` e fast-forward para `main` (com autorização). Rules não voltam sozinhas: use o histórico no console."
+    },
+    {
+     "id": "backup-e-recuperacao-de-dados",
+     "heading": "Backup e recuperação de dados",
+     "level": 2,
+     "md": "Não há backup automático no plano Spark. A exportação existente é por **CSV/ZIP** em *Manutenção de dados* (ver [Manutenção de dados](doc:manutencao-dados)). Exporte antes de qualquer limpeza em massa."
+    },
+    {
+     "id": "adicionar-uma-pagina-nova",
+     "heading": "Adicionar uma página nova",
+     "level": 2,
+     "md": "1. `pages/<id>.html`: copie uma página existente e ajuste `<title>` e `data-page=\"<id>\"`. **Sem script inline** (CSP).\n2. `js/modules/<id>.js` exportando `render(container, { user })`.\n3. Registre em `MODULES` (`js/app.js`).\n4. `vercel.json`: rewrite `/<id>` → `/pages/<id>` (sem `.html`).\n5. Se for item de menu: `js/utils/nav.js` (`NAV_ITEMS`); senão adicione a página aos testes de rotas como as páginas internas.\n6. **Documente:** crie `docs/playbook/funcionalidades/<nn>-<id>.md` com `page: <id>` no front matter. O teste do playbook **falha** sem a ficha.\n7. `npm run docs:build` e comite o resultado."
+    },
+    {
+     "id": "adicionar-uma-colecao-ou-campo",
+     "heading": "Adicionar uma coleção ou campo",
+     "level": 2,
+     "md": "1. `js/core/model/schemas.js` (`SCHEMAS`) e validação em `js/core/model/validation.js`.\n2. `firestore.rules`: `keysOk`, `requiredOk`, validações e permissões; **teste em `tests/rules/`**.\n3. Service em `js/services/` usando `createAudited`/`updateAudited`.\n4. Se entrar no CSV: `js/core/importSchema.js`. Se for movimento que altera saldo: não escreva direto, crie uma operação de servidor.\n5. Índice composto em `firestore.indexes.json` se houver filtro + ordenação.\n6. Ficha da funcionalidade e `npm run docs:build`."
+    },
+    {
+     "id": "adicionar-uma-operacao-de-servidor",
+     "heading": "Adicionar uma operação de servidor",
+     "level": 2,
+     "md": "1. Em `server/finance/ops.mjs`: `defineOp('<dominio>.<acao>', { validate, prepare(ctx, p, operationId) })`. `validate` usa `v.*` (`core.mjs`). `prepare` **lê tudo antes** de escrever e devolve `{ result, apply }`; em todo movimento que altera saldo chame `ctx.touchAccount(contaId)`.\n2. Nunca confie em saldo/status vindo do cliente; use `ctx.balanceOf(conta)` dentro da transação.\n3. Cliente: função no service chamando `financeResult('<op>', params, { operationId })` (`js/services/financeApi.js`); gere o `operationId` ao abrir o formulário.\n4. Rules: o caminho direto equivalente deve estar **negado**.\n5. Testes: recusas em `tests/services/`, saldo/concorrência em `tests/integration/`.\n6. Documente a operação em uma ficha (o teste do playbook exige o nome da operação em algum documento)."
+    },
+    {
+     "id": "playbook-defasado-no-ci",
+     "heading": "Playbook defasado no CI",
+     "level": 2,
+     "md": "Se o teste acusar \"Playbook defasado\": `npm run docs:build`, confira o `git diff docs/playbook/` e comite. Em push na `claude-dev` a automação faz isso sozinha (ver [Atualização automática](doc:atualizacao-automatica))."
+    }
+   ]
+  },
+  {
+   "id": "referencia-gerada",
+   "title": "Referência gerada do código",
+   "category": "Referência",
+   "tags": [
+    "referência",
+    "gerado",
+    "rotas",
+    "rules",
+    "operações",
+    "variáveis",
+    "scripts",
+    "csp"
+   ],
+   "summary": "Fatos extraídos automaticamente do código (rotas, coleções, operações do servidor, ambiente, scripts, testes, CSP, tarefas).",
+   "files": [
+    "scripts/gen-playbook.mjs"
+   ],
+   "page": "",
+   "file": "docs/playbook/referencia-gerada.md",
+   "sections": [
+    {
+     "id": "resumo",
+     "heading": "Resumo",
+     "level": 2,
+     "md": "> **Este arquivo é GERADO por `npm run docs:build` (`scripts/gen-playbook.mjs`). Não edite à mão:** a próxima geração sobrescreve. Ele reflete o estado atual do código e é atualizado automaticamente a cada push na `claude-dev` (ver [Atualização automática](doc:atualizacao-automatica))."
+    },
+    {
+     "id": "paginas-e-rotas",
+     "heading": "Páginas e rotas",
+     "level": 2,
+     "md": "Cada página HTML, a rota limpa na Vercel (`vercel.json`), o módulo que a renderiza e os services que ele importa.\n\n| Página | Menu | Rota | Módulo | Services |\n| --- | --- | --- | --- | --- |\n| `pages/assinaturas.html` | Assinaturas | `/assinaturas` | `js/modules/assinaturas.js` | `accounts`, `categories`, `creditCards`, `debtors`, `subscriptions` |\n| `pages/bancos.html` | Bancos | `/bancos` | `js/modules/bancos.js` | `accounts`, `balances`, `financeApi` |\n| `pages/cartoes.html` | Cartões | `/cartoes` | `js/modules/cartoes.js` | `accounts`, `categories`, `creditCards`, `debtors`, `financeApi` |\n| `pages/categorias.html` | Categorias | `/categorias` | `js/modules/categorias.js` | `categories` |\n| `pages/configuracoes.html` | Configurações | `/configuracoes` | `js/modules/configuracoes.js` | `auth`, `maintenance`, `preferences` |\n| `pages/dashboard.html` | Dashboard | `/dashboard` | `js/modules/dashboard.js` | `dashboard` |\n| `pages/despesas.html` | Despesas | `/despesas` | `js/modules/despesas.js` | `accounts`, `categories`, `expenses`, `financeApi`, `pager` |\n| `pages/devedores.html` | Devedores | `/devedores` | `js/modules/devedores.js` | `debtors` |\n| `pages/manutencao-dados.html` | (fora do menu) | `/manutencao-dados` | `js/modules/manutencao-dados.js` | `adminClaims`, `importer`, `maintenance`, `seed` |\n| `pages/metas.html` | Metas | `/metas` | `js/modules/metas.js` | `accounts`, `balances`, `financeApi`, `goals` |\n| `pages/orcamentos.html` | Orçamentos | `/orcamentos` | `js/modules/orcamentos.js` | `budgets`, `categories` |\n| `pages/playbook.html` | (fora do menu) | `/playbook` | `js/modules/playbook.js` | `maintenance`, `playbook` |\n| `pages/receitas.html` | Receitas | `/receitas` | `js/modules/receitas.js` | `accounts`, `categories`, `financeApi`, `incomes`, `pager` |\n| `pages/relatorios.html` | Relatórios | `/relatorios` | `js/modules/relatorios.js` | `reports` |\n| `pages/transferencias.html` | Transferências | `/transferencias` | `js/modules/transferencias.js` | `accounts`, `financeApi`, `goals`, `pager`, `reversals`, `transfers` |"
+    },
+    {
+     "id": "funcoes-de-servidor-vercel",
+     "heading": "Funções de servidor (Vercel)",
+     "level": 2,
+     "md": "| Arquivo | maxDuration | includeFiles |\n| --- | --- | --- |\n| `api/admin-claims.mjs` | padrão | `—` |\n| `api/docs.mjs` | 10 | `docs/playbook/index.json` |\n| `api/finance.mjs` | 30 | `—` |\n| `api/validation.mjs` | 60 | `—` |"
+    },
+    {
+     "id": "colecoes-do-firestore-e-rules",
+     "heading": "Coleções do Firestore e Rules",
+     "level": 2,
+     "md": "Extraído de `firestore.rules`. \"negado\" = o cliente não escreve (só o servidor, via Admin SDK). Campos = lista fechada aceita pelas Rules (sem `createdAt`/`updatedAt`).\n\n| Coleção (`users/{uid}/…`) | Leitura | Criar/editar | Excluir | Campos |\n| --- | --- | --- | --- | --- |\n| `profile` | dono | dono | negado | `name` `email` `currency` `locale` |\n| `settings` | dono | dono | negado | `theme` `hideValues` `firstWeekday` |\n| `accounts` | dono+admin | dono | admin | `institution` `name` `type` `initialBalanceCents` `openingDate` `color` `status` `ledgerSeq` |\n| `categories` | dono+admin | dono | dono+admin | `name` `kind` `color` |\n| `incomes` | dono+admin | dono | dono+admin | `description` `categoryId` `amountCents` `expectedDate` `receivedDate` `accountId` `status` `recurrence` `notes` `operationId` |\n| `expenses` | dono+admin | dono | dono+admin | `description` `categoryId` `amountCents` `accountId` `purchaseDate` `dueDate` `paidDate` `status` `recurrence` `notes` `installmentGroupId` `operationId` |\n| `transfers` | dono+admin | dono | dono+admin | `fromAccountId` `toAccountId` `amountCents` `date` `reason` `notes` `status` `operationId` |\n| `subscriptions` | dono+admin | dono | dono+admin | `name` `amountCents` `periodicity` `nextChargeDate` `chargeDay` `accountId` `cardId` `debtorId` `categoryId` `status` `notes` |\n| `debtors` | dono+admin | dono | admin | `name` `loanDate` `lentCents` `receivedCents` `status` `notes` `archived` |\n| `debts` | dono+admin | dono | admin | `debtorId` `description` `principalCents` `dueDate` `installmentNumber` `installmentsTotal` `debtGroupId` `status` |\n| `debtPayments` | dono+admin | negado | admin | — |\n| `goals` | dono+admin | dono | dono+admin | `name` `description` `targetCents` `deadline` `accountId` `status` |\n| `goalTransactions` | dono+admin | negado | admin | — |\n| `creditCards` | dono+admin | dono | dono+admin | `name` `brand` `limitCents` `closingDay` `dueDay` `accountId` `color` `status` |\n| `cardPurchases` | dono+admin | dono | dono+admin | `cardId` `description` `amountCents` `purchaseDate` `installmentsTotal` `installmentNumber` `categoryId` `invoiceId` `debtorId` `notes` |\n| `invoices` | dono+admin | dono | dono+admin | `cardId` `referenceMonth` `closingDate` `dueDate` `totalCents` `paidCents` `accountId` `paidAt` `status` |\n| `budgets` | dono+admin | dono | dono+admin | `categoryId` `month` `limitCents` |\n| `reversals` | dono+admin | negado | admin | — |\n| `operations` | dono+admin | negado | admin | — |\n| `batches` | dono+admin | negado | admin | — |\n| `auditLog` | dono | dono | negado | `action` `entity` `entityId` `before` `after` `actorUid` |"
+    },
+    {
+     "id": "operacoes-do-servidor-post-api-finance",
+     "heading": "Operações do servidor (POST /api/finance)",
+     "level": 2,
+     "md": "Registradas com `defineOp` em `server/finance/ops.mjs`. \"Login recente\" = exige `auth_time` ≤ 5 min (VF-SEC-01).\n\n| Operação | Login recente |\n| --- | --- |\n| `account.adjustOpening` | — |\n| `account.archive` | — |\n| `account.delete` | — |\n| `account.unarchive` | — |\n| `data.clearOwn` | sim |\n| `debt.cancel` | — |\n| `debt.cancelMany` | — |\n| `debt.receive` | — |\n| `debt.reschedule` | — |\n| `debt.settleBatch` | — |\n| `debtor.archive` | — |\n| `debtor.delete` | — |\n| `debtor.unarchive` | — |\n| `expense.create` | — |\n| `expense.pay` | — |\n| `goal.deposit` | — |\n| `goal.withdraw` | — |\n| `income.create` | — |\n| `income.receive` | — |\n| `invoice.pay` | — |\n| `reversal.create` | — |\n| `transfer.confirm` | — |\n| `transfer.create` | — |"
+    },
+    {
+     "id": "variaveis-de-ambiente-servidor",
+     "heading": "Variáveis de ambiente (servidor)",
+     "level": 2,
+     "md": "Lidas por `process.env`/`env` em `api/`, `server/` e `scripts/`. Valores NUNCA aparecem aqui.\n\n| Variável | Usada em |\n| --- | --- |\n| `APPCHECK_ENFORCE` | `server/finance/core.mjs` |\n| `FIREBASE_AUTH_EMULATOR_HOST` | `server/admin/claims.mjs` |\n| `FIREBASE_PROJECT_ID` | `server/admin/claims.mjs`, `server/finance/core.mjs` |\n| `FIREBASE_SERVICE_ACCOUNT` | `server/admin/claims.mjs`, `server/finance/core.mjs` |\n| `FIRESTORE_EMULATOR_HOST` | `server/finance/core.mjs` |\n| `GCLOUD_PROJECT` | `server/finance/core.mjs` |\n| `PORT` | `scripts/dev-server.mjs` |\n| `REQUIRE_VERIFIED_EMAIL` | `server/finance/core.mjs` |\n| `VERCEL_ENV` | `server/env-guard.mjs` |"
+    },
+    {
+     "id": "scripts-npm",
+     "heading": "Scripts npm",
+     "level": 2,
+     "md": "| Script | Comando |\n| --- | --- |\n| `npm run emulators` | `firebase emulators:start --only auth,firestore` |\n| `npm run test` | `npm run test:unit && npm run test:rules` |\n| `npm run test:unit` | `node --test tests/model/*.test.mjs tests/services/*.test.mjs` |\n| `npm run test:rules` | `firebase emulators:exec --only firestore,auth --project demo-vault-finance \"node --test tests/rules/*.test.…` |\n| `npm run serve` | `npx http-server -p 5500 -c-1 .` |\n| `npm run test:e2e` | `firebase emulators:exec --only firestore,auth --project demo-vault-finance \"node tests/e2e/flows.mjs && nod…` |\n| `npm run lint` | `node scripts/lint.mjs` |\n| `npm run test:integration` | `firebase emulators:exec --only firestore,auth --project demo-vault-finance \"node --test --test-concurrency=…` |\n| `npm run serve:api` | `node scripts/dev-server.mjs` |\n| `npm run docs:build` | `node scripts/gen-playbook.mjs` |\n| `npm run docs:check` | `node scripts/gen-playbook.mjs --check` |"
+    },
+    {
+     "id": "dependencias",
+     "heading": "Dependências",
+     "level": 2,
+     "md": "| Pacote | Versão | Tipo |\n| --- | --- | --- |\n| `firebase-admin` | `^13.10.0` | produção |\n| `@firebase/rules-unit-testing` | `^3.0.4` | desenvolvimento |\n| `firebase` | `^10.12.2` | desenvolvimento |\n| `firebase-tools` | `^13.23.1` | desenvolvimento |\n\nMotor exigido: `node >=24`."
+    },
+    {
+     "id": "testes",
+     "heading": "Testes",
+     "level": 2,
+     "md": "| Pasta | Arquivos |\n| --- | --- |\n| `tests/model/` | 5 |\n| `tests/services/` | 37 |\n| `tests/rules/` | 1 |\n| `tests/integration/` | 12 |\n| `tests/e2e/` | 18 |"
+    },
+    {
+     "id": "workflows-do-github",
+     "heading": "Workflows do GitHub",
+     "level": 2,
+     "md": "| Arquivo | Nome | Gatilhos |\n| --- | --- | --- |\n| `ci.yml` | CI | push: branches: [claude-dev, main] pull_request: |\n| `playbook.yml` | Playbook | push: branches: [claude-dev] |"
+    },
+    {
+     "id": "content-security-policy-vercel-json",
+     "heading": "Content-Security-Policy (vercel.json)",
+     "level": 2,
+     "md": "| Diretiva | Valores |\n| --- | --- |\n| `default-src` | 'self' |\n| `script-src` | 'self' 'sha256-…' https://www.gstatic.com https://apis.google.com https://www.google.com/recaptcha/ |\n| `style-src` | 'self' 'unsafe-inline' |\n| `img-src` | 'self' data: |\n| `font-src` | 'self' |\n| `connect-src` | 'self' https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://firebaseappcheck.googleapis.com |\n| `frame-src` | https://vault-finance-d1603.firebaseapp.com https://www.google.com/recaptcha/ |\n| `object-src` | 'none' |\n| `base-uri` | 'self' |\n| `form-action` | 'self' |\n| `frame-ancestors` | 'none' |\n| `upgrade-insecure-requests` |  |"
+    },
+    {
+     "id": "tarefas-do-plan-md",
+     "heading": "Tarefas do PLAN.md",
+     "level": 2,
+     "md": "83 concluídas, 0 abertas.\n\n| ID | Estado | Título |\n| --- | --- | --- |\n| `VF-1-01` | concluída | Auditoria nunca persiste |\n| `VF-1-02` | concluída | Exclusão de conta com vínculos |\n| `VF-1-03` | concluída | Cabeçalhos de segurança (CSP/SRI) |\n| `VF-SEC-01` | concluída | Revogação/desativação valem no servidor |\n| `VF-SEC-02` | concluída | Recusar variáveis de emulador em produção |\n| `VF-SEC-03` | concluída | Limitar abuso e custo |\n| `VF-SEC-04` | concluída | Não servir arquivos internos |\n| `VF-SEC-05` | concluída | Endurecer a CSP |\n| `VF-SEC-06` | concluída | Política de senha e contas |\n| `VF-SEC-07` | concluída | Auditoria não forjável |\n| `VF-SEC-08` | concluída | CSV: neutralizar `-` inicial |\n| `VF-SEC-09` | concluída | Dependências e CI |\n| `VF-2-01` | concluída | Transições de status de transferência |\n| `VF-2-02` | concluída | Persistir perfil/settings/tema |\n| `VF-2-03a` | concluída | Assinaturas |\n| `VF-2-03b` | concluída | Devedores |\n| `VF-2-03b2` | concluída | Parcelas e recebimentos de devedores |\n| `VF-2-03c` | concluída | Metas |\n| `VF-2-03d` | concluída | Cartões/faturas |\n| `VF-2-03e` | concluída | Orçamentos |\n| `VF-2-03f` | concluída | Dashboard |\n| `VF-2-03g` | concluída | Relatórios |\n| `VF-2-03h` | concluída | Follow-ups de assinaturas |\n| `VF-2-04` | concluída | Rota limpa `/categorias` |\n| `VF-2-03i` | concluída | Erro de permissão em compra de cartão, dashboard resiliente e débitos de devedor por origem |\n| `VF-2-03j` | concluída | Fechamento do mês por devedor e detalhamento das parcelas de cartão |\n| `VF-2-03l` | concluída | Devedor sem empréstimo inicial e seletor de devedor na compra de cartão |\n| `VF-2-03m` | concluída | Seletor de devedores na compra de cartão e dívidas (à vista/parceladas/cartão) por devedor |\n| `VF-2-03n` | concluída | Antecipar/dar baixa em parcela e quitar dívida |\n| `VF-2-03o` | concluída | Metas (permission-denied e conta vinculada), exclusão atômica de despesas/receitas e vínculo despesa×conta×cartão |\n| `VF-2-03q` | concluída | Causa do `permission-denied` em Metas, `null` na tela, fatura paga com conta (VF-2-03p) e Dashboard consolidado |\n| `VF-2-03r` | concluída | Assinaturas × Cartões/Faturas × Contas: sem dupla contagem, e fatura consolidada |\n| `VF-2-03t` | concluída | Exclusão de cartão com faturas canceladas/zeradas e exclusão/ocultação de faturas |\n| `VF-2-03u` | concluída | Painel de manutenção: limpeza, massa de testes e importação/exportação CSV |\n| `VF-2-03v` | concluída | Usabilidade do CSV (modelo vazio × exportação) e exportação de todas as entidades |\n| `VF-2-03w` | concluída | Separação de privilégios (usuário × administrador) e limpeza administrativa |\n| `VF-2-03x` | concluída | Troca de senha do usuário autenticado (Configurações) |\n| `VF-2-03y` | concluída | `404` em rotas limpas da Vercel (`/manutencao-dados`, `/metas`, …) e violações de CSP |\n| `VF-2-03z` | concluída | Manutenção de dados aberta a qualquer usuário autenticado; escopos administrativos só com a claim `admin` |\n| `VF-2-03aa` | concluída | Administrador promove/revoga outros administradores |\n| `VF-2-03ab` | concluída | `401` em `/api/admin-claims` em produção e listagem de usuários/administradores |\n| `VF-2-03ac` | concluída | CSV unificado (todas as entidades), escopo estrito ao uid e importação idempotente |\n| `VF-2-03ad` | concluída | Receitas × Contas: `conta` e `instituicao` independentes no CSV |\n| `VF-2-03ae` | concluída | Contas: `name` opcional (rótulo \"Conta\") e rótulo único de conta nos selects |\n| `VF-2-03af` | concluída | Transferência exige saldo suficiente na origem |\n| `VF-2-03ag` | concluída | Excluir transferência em qualquer status |\n| `VF-2-03ah` | concluída | Transferências para/de metas (guardar e sacar) |\n| `VF-2-03ai` | concluída | Saldo de abertura (+ data de abertura) e previsão financeira mensal |\n| `VF-2-03aj` | concluída | Fuso America/Sao_Paulo como referência de \"hoje\" e assinaturas no cartão: comprometimento × caixa |\n| `VF-2-03ak` | concluída | Quitar parcela individual e todas as parcelas de um mês (Devedores) |\n| `VF-2-03al` | concluída | Recebimentos parciais × idempotência: ID exclusivo por recebimento, histórico imutável e total do devedor por increment |\n| `VF-2-03am` | concluída | Devedor quitado: ações disponíveis e novas dívidas/compras (reabre) |\n| `VF-2-03an` | concluída | Auditoria de variáveis e lógica: correções |\n| `VF-2-03ao` | concluída | Auditoria de integridade financeira (recebimentos, concorrência, Rules, reconciliação) |\n| `VF-ARQ-01` | concluída | Avaliação objetiva: operações financeiras críticas em backend confiável (Admin SDK) |\n| `VF-COR-04` | concluída | Cancelar a dívida inteira de um devedor |\n| `VF-COR-05` | concluída | Cancelar várias parcelas selecionadas em 1 requisição |\n| `VF-COR-06` | concluída | Layout do modal de Dívidas do devedor |\n| `VF-COR-07` | concluída | Assinatura: conta opcional e cobrança em cartão, conta ou devedor |\n| `VF-COR-08` | concluída | Vínculo com devedor gera a cobrança da próxima fatura, sem duplicar |\n| `VF-COR-09` | concluída | Recorrência mensal/anual perdia o dia 29–31 |\n| `VF-COR-10` | concluída | A dívida do devedor acompanha a assinatura; cancelar devolve o emprestado |\n| `VF-UX-01` | concluída | Ordenação e filtro em todas as tabelas |\n| `VF-UX-02` | concluída | Layout, modais e responsividade (auditoria + correções) |\n| `VF-QA-01` | concluída | Auditoria de qualidade e validação funcional geral |\n| `VF-3-01` | concluída | Reduzir duplicação nos services |\n| `VF-3-02` | concluída | Dividir módulos extensos |\n| `VF-3-03` | concluída | Tratamento de datas |\n| `VF-3-04` | concluída | Atualizar README e mensagens defasadas |\n| `VF-3-05` | concluída | Reestruturação estrutural (zero regressão) |\n| `VF-4-01` | concluída | Scripts de teste confiáveis |\n| `VF-4-02` | concluída | CI |\n| `VF-4-03` | concluída | Paginação e limites de leitura |\n| `VF-4-04` | concluída | Testes de UI (Playwright) |\n| `VF-4-05` | concluída | Lint/formatação |\n| `VF-4-06` | concluída | Node LTS mais novo: CI em 24 e 26 |\n| `VF-UX-03` | concluída | Dashboard claro e com período |\n| `VF-PWA-01` | concluída | App instalável no smartphone (Chrome) |\n| `VF-UX-04` | concluída | Revisão de design (frontend-design) |\n| `VF-UX-06` | concluída | Auditoria de datas no formato brasileiro |\n| `VF-UX-07` | concluída | Fatura do mês e seletor de mês em Cartões; \"fatura a pagar\" correta no Dashboard |\n| `VF-COR-11` | concluída | Transferência estornada \"presa\" (confirmada com estorno já registrado) |\n| `VF-UX-08` | concluída | Campos de data em DD/MM/AAAA independentes do navegador |"
+    }
+   ]
+  }
+ ]
+}

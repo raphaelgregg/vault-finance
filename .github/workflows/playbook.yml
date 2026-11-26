@@ -1,0 +1,41 @@
+# VF-DOC-01 — Atualização automática do playbook: em push na claude-dev, regenera docs/playbook/ e comita o resultado.
+# O gerador é determinístico (sem datas): só há commit quando o código mudou o conteúdo gerado.
+# Pushes feitos com GITHUB_TOKEN não disparam outros workflows (sem laço). Requer `contents: write` (declarado abaixo).
+name: Playbook
+
+on:
+  push:
+    branches: [claude-dev]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: playbook-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  regenerate:
+    name: Regenerar docs/playbook
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run docs:build
+      - name: Comitar se mudou
+        run: |
+          if git diff --quiet -- docs/playbook; then
+            echo "Playbook em dia."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/playbook
+          git commit -m "docs(playbook): atualiza referência e índice gerados"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

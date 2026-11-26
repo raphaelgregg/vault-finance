@@ -33,6 +33,7 @@ const MODULES = {
   relatorios: () => import('./modules/relatorios.js'),
   configuracoes: () => import('./modules/configuracoes.js'),
   'manutencao-dados': () => import('./modules/manutencao-dados.js'),
+  playbook: () => import('./modules/playbook.js'),
 };
 
 async function bootstrap() {

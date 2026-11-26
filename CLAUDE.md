@@ -13,7 +13,7 @@ Este arquivo contém regras permanentes. O estado operacional vive em `PLAN.md`.
 
 ### Estrutura (primeiro nível)
 
-`index.html` (login) · `pages/` · `css/` · `js/` (`core` puro com `model/`, `firebase`, `services`, `components`, `modules`, `utils`) · `api/` + `server/` (funções Vercel/Admin SDK) · `docs/ARCHITECTURE.md` (camadas e regras de dependência) · `scripts/` · `tests/` (`model`, `services`, `rules`, `integration`, `e2e`) · `assets/` · `firestore.rules` · `firestore.indexes.json` · `firebase.json` · `vercel.json`
+`index.html` (login) · `pages/` · `css/` · `js/` (`core` puro com `model/`, `firebase`, `services`, `components`, `modules`, `utils`) · `api/` + `server/` (funções Vercel/Admin SDK) · `docs/ARCHITECTURE.md` (camadas e regras de dependência) · `docs/playbook/` (playbook de manutenção: Markdown + página `/playbook` só para administradores) · `scripts/` · `tests/` (`model`, `services`, `rules`, `integration`, `e2e`) · `assets/` · `firestore.rules` · `firestore.indexes.json` · `firebase.json` · `vercel.json`
 
 ### Comandos declarados (package.json)
 
@@ -24,7 +24,7 @@ Este arquivo contém regras permanentes. O estado operacional vive em `PLAN.md`.
 | Servir estático em :5500 | `npm run serve` |
 | Deploy de regras/índices | `npx firebase deploy --only firestore:rules,firestore:indexes` (somente com autorização) |
 
-Também declarados: `npm run lint`, `npm run test:unit`, `npm run test:integration`, `npm run test:e2e`, `npm run serve:api`. Não há script de build. Não invente comandos.
+Também declarados: `npm run lint`, `npm run test:unit`, `npm run test:integration`, `npm run test:e2e`, `npm run serve:api`, `npm run docs:build` (regenera `docs/playbook/`) e `npm run docs:check` (falha se o playbook estiver defasado). Não há script de build. Não invente comandos.
 
 ### Ignorar na leitura
 
@@ -122,6 +122,8 @@ Em review/auditoria completa, avalie (somente o aplicável à stack): arquitetur
 - Sem reescrever histórico (rebase/force push/reset) sem autorização.
 
 ## 9. Continuidade e contexto
+
+- **Playbook (`docs/playbook/`):** ao criar ou alterar uma página, coleção, operação do servidor, variável de ambiente, regra de segurança ou procedimento de deploy, atualize a ficha correspondente e rode `npm run docs:build`. Os testes (`tests/services/playbook.test.mjs`) falham se faltar ficha ou se a parte gerada estiver defasada; uma GitHub Action regenera a parte gerada na `claude-dev`.
 
 - `CLAUDE.md` = regras permanentes; `PLAN.md` = estado operacional.
 - Não dependa só do histórico da conversa.

@@ -7,7 +7,8 @@
   ],
   "functions": {
     "api/finance.mjs": { "maxDuration": 30 },
-    "api/validation.mjs": { "maxDuration": 60 }
+    "api/validation.mjs": { "maxDuration": 60 },
+    "api/docs.mjs": { "maxDuration": 10, "includeFiles": "docs/playbook/index.json" }
   },
   "headers": [
     {
@@ -47,6 +48,7 @@
     { "source": "/cartoes", "destination": "/pages/cartoes" },
     { "source": "/relatorios", "destination": "/pages/relatorios" },
     { "source": "/configuracoes", "destination": "/pages/configuracoes" },
-    { "source": "/manutencao-dados", "destination": "/pages/manutencao-dados" }
+    { "source": "/manutencao-dados", "destination": "/pages/manutencao-dados" },
+    { "source": "/playbook", "destination": "/pages/playbook" }
   ]
 }

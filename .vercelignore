@@ -3,7 +3,8 @@
 PLAN.md
 CLAUDE.md
 README.md
-docs/
+# docs/ vai para o deploy SÓ para a função /api/docs ler `docs/playbook/index.json` (includeFiles); a rota estática /docs/* é
+# bloqueada por redirect em vercel.json (nunca servida publicamente).
 tests/
 scripts/
 .github/

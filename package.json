@@ -16,7 +16,9 @@
     "test:e2e": "firebase emulators:exec --only firestore,auth --project demo-vault-finance \"node tests/e2e/flows.mjs && node tests/e2e/movements.mjs && node tests/e2e/debtors.mjs && node tests/e2e/maintenance.mjs && node tests/e2e/maintenance-inventory.mjs && node tests/e2e/validation-center.mjs && node tests/e2e/auth.mjs && node tests/e2e/csv.mjs && node tests/e2e/reversals-visibility.mjs && node tests/e2e/balances-reversals.mjs && node tests/e2e/all-pages.mjs && node tests/e2e/tables.mjs && node tests/e2e/responsive.mjs && node tests/e2e/confirmations.mjs && node tests/e2e/card-purchase-edit.mjs && node tests/e2e/date-inputs.mjs\"",
     "lint": "node scripts/lint.mjs",
     "test:integration": "firebase emulators:exec --only firestore,auth --project demo-vault-finance \"node --test --test-concurrency=1 tests/integration/*.test.mjs\"",
-    "serve:api": "node scripts/dev-server.mjs"
+    "serve:api": "node scripts/dev-server.mjs",
+    "docs:build": "node scripts/gen-playbook.mjs",
+    "docs:check": "node scripts/gen-playbook.mjs --check"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^3.0.4",

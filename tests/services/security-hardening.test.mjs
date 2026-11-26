@@ -60,8 +60,9 @@ describe('VF-SEC-02 — variáveis de emulador recusadas em produção/preview',
 describe('VF-SEC-04 — arquivos internos fora do deploy', () => {
   const ignore = readFileSync(new URL('../../.vercelignore', import.meta.url), 'utf8').split('\n').map((l) => l.trim());
   it('.vercelignore exclui o que é interno e mantém o que as funções importam', () => {
-    for (const p of ['PLAN.md', 'CLAUDE.md', 'tests/', 'docs/', 'scripts/', '.github/', 'firestore.rules']) assert.ok(ignore.includes(p), p);
+    for (const p of ['PLAN.md', 'CLAUDE.md', 'tests/', 'scripts/', '.github/', 'firestore.rules']) assert.ok(ignore.includes(p), p);
     for (const p of ['server/', 'api/', 'js/', 'package.json', 'package-lock.json']) assert.ok(!ignore.includes(p), `${p} é necessário às funções`);
+    assert.ok(!ignore.includes('docs/'), 'docs/ sobe só para /api/docs ler docs/playbook/index.json (nunca é servido estático: ver redirect)');
   });
   it('vercel.json redireciona /server, /tests, /docs e /scripts', () => {
     const { redirects } = JSON.parse(readFileSync(new URL('../../vercel.json', import.meta.url), 'utf8'));
