@@ -28,6 +28,8 @@ export function mountTopbar(root, { title, user, onMenuClick } = {}) {
   logout.innerHTML = '<i data-lucide="log-out" aria-hidden="true"></i><span>Sair</span>';
   logout.addEventListener('click', async () => {
     await signOut();
+    if (document.body.dataset.leaving) return; // o observador de sessão de app.js já está saindo (evita navegação dupla)
+    document.body.dataset.leaving = '1';
     window.location.replace('../index.html');
   });
 

@@ -164,7 +164,11 @@ async function bootstrap() {
   });
 
   // O documento agora vive por muito mais tempo: se a sessão terminar (ex.: sair em outra aba), volta ao login.
-  onSessionChange((current) => { if (!current) window.location.replace('../index.html'); });
+  onSessionChange((current) => {
+    if (current || document.body.dataset.leaving) return;
+    document.body.dataset.leaving = '1'; // uma única navegação para o login (o botão Sair também confere este marcador)
+    window.location.replace('../index.html');
+  });
 }
 
 bootstrap();
