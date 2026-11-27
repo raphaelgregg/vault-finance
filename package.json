@@ -18,6 +18,7 @@
     "test:integration": "firebase emulators:exec --only firestore,auth --project demo-vault-finance \"node --test --test-concurrency=1 tests/integration/*.test.mjs\"",
     "serve:api": "node scripts/dev-server.mjs",
     "docs:build": "node scripts/gen-playbook.mjs",
+    "manual:build": "node scripts/gen-manual.mjs",
     "docs:check": "node scripts/gen-playbook.mjs --check"
   },
   "devDependencies": {

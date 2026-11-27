@@ -147,6 +147,14 @@ Não há backup automático no plano Spark. A exportação existente é por **CS
 5. Testes: recusas em `tests/services/`, saldo/concorrência em `tests/integration/`.
 6. Documente a operação em uma ficha (o teste do playbook exige o nome da operação em algum documento).
 
+## Atualizar o manual do usuário
+
+O manual para usuários finais (linguagem simples, passo a passo e como as operações se comunicam) é distinto do playbook (que é para quem mantém). Fonte: `docs/manual/manual-usuario.md`; estilo: `docs/manual/manual.css`; resultado: `assets/manual/manual-vault-finance.pdf`, servido em `/assets/manual/manual-vault-finance.pdf` e oferecido em *Configurações → Baixar manual do usuário (PDF)*.
+
+1. Edite o Markdown quando mudar o que o usuário vê (tela, regra, nome de botão). O teste `tests/services/manual.test.mjs` exige que cada item do menu apareça no manual.
+2. `npm run manual:build` (exige `pandoc` e `playwright`/Chromium **na sua máquina**; não são dependências do projeto nem rodam na Vercel) e confira o PDF.
+3. Comite o `.md` **e** o `.pdf`. Não há teste que detecte PDF defasado em relação ao Markdown (o PDF é um artefato binário): confira `git log` dos dois arquivos antes de publicar.
+
 ## Playbook defasado no CI
 
 Se o teste acusar "Playbook defasado": `npm run docs:build`, confira o `git diff docs/playbook/` e comite. Em push na `claude-dev` a automação faz isso sozinha (ver [Atualização automática](doc:atualizacao-automatica)).

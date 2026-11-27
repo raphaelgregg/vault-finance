@@ -125,6 +125,7 @@ export async function render(container, { user }) {
     el('section', { class: 'panel' }, [el('div', { class: 'panel__body' }, [
       el('p', { class: 'card__hint', text: 'Ferramentas de dados: apagar meus dados, massa de testes e importação/exportação CSV.' }),
       el('a', { class: 'btn btn--secondary', href: 'manutencao-dados.html', id: 'link-manutencao', text: 'Abrir manutenção de dados' }),
+      el('a', { class: 'btn btn--secondary', href: '/assets/manual/manual-vault-finance.pdf', id: 'link-manual', download: 'manual-vault-finance.pdf', text: 'Baixar manual do usuário (PDF)' }),
       admin ? el('a', { class: 'btn btn--secondary', href: 'playbook.html', id: 'link-playbook', text: 'Abrir playbook (administradores)' }) : null,
     ])])
   );

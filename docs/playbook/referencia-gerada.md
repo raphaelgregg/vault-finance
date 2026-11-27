@@ -129,6 +129,7 @@ Lidas por `process.env`/`env` em `api/`, `server/` e `scripts/`. Valores NUNCA a
 | `npm run test:integration` | `firebase emulators:exec --only firestore,auth --project demo-vault-finance "node --test --test-concurrency=…` |
 | `npm run serve:api` | `node scripts/dev-server.mjs` |
 | `npm run docs:build` | `node scripts/gen-playbook.mjs` |
+| `npm run manual:build` | `node scripts/gen-manual.mjs` |
 | `npm run docs:check` | `node scripts/gen-playbook.mjs --check` |
 
 ## Dependências
@@ -147,7 +148,7 @@ Motor exigido: `node >=24`.
 | Pasta | Arquivos |
 | --- | --- |
 | `tests/model/` | 7 |
-| `tests/services/` | 39 |
+| `tests/services/` | 40 |
 | `tests/rules/` | 1 |
 | `tests/integration/` | 12 |
 | `tests/e2e/` | 20 |

@@ -16,7 +16,7 @@ Rota `/configuracoes` (item de menu). Módulo `js/modules/configuracoes.js`.
 1. **Perfil e preferências:** nome, **tema** (`light`/`dark`/`system`), **ocultar valores** e **primeiro dia da semana** (0–6). Gravados em `users/{uid}/profile/main` e `users/{uid}/settings/main` por `js/services/preferences.js` (`getProfile`, `saveProfile`, `getSettings`, `saveSettings`). O tema também fica em `localStorage` (chave da UI) para evitar o flash ao recarregar; o valor da conta prevalece em um dispositivo novo.
 2. **Segurança — senha** (`buildPasswordPanel`): senha atual + nova + confirmação, com **reautenticação** antes de `updatePassword`; alternativa por e-mail de redefinição. Só para contas com provedor `password`.
 3. **Segurança — e-mail** (`buildEmailVerificationPanel`): mostra se o e-mail está verificado, **Enviar e-mail de verificação** e **Já verifiquei** (recarrega o usuário e renova o ID token).
-4. **Atalhos:** *Abrir manutenção de dados* (qualquer usuário) e *Abrir playbook (administradores)* (só quem tem a claim `admin`; a barreira real é o servidor).
+4. **Atalhos:** *Baixar manual do usuário (PDF)* (`#link-manual`, VF-DOC-02: ver [Runbooks](doc:runbooks#atualizar-o-manual-do-usuario)), *Abrir manutenção de dados* (qualquer usuário) e *Abrir playbook (administradores)* (só quem tem a claim `admin`; a barreira real é o servidor).
 
 ## Regras (espelhadas das Rules)
 

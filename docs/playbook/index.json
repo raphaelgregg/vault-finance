@@ -594,7 +594,7 @@
      "id": "paineis",
      "heading": "Painéis",
      "level": 2,
-     "md": "1. **Perfil e preferências:** nome, **tema** (`light`/`dark`/`system`), **ocultar valores** e **primeiro dia da semana** (0–6). Gravados em `users/{uid}/profile/main` e `users/{uid}/settings/main` por `js/services/preferences.js` (`getProfile`, `saveProfile`, `getSettings`, `saveSettings`). O tema também fica em `localStorage` (chave da UI) para evitar o flash ao recarregar; o valor da conta prevalece em um dispositivo novo.\n2. **Segurança — senha** (`buildPasswordPanel`): senha atual + nova + confirmação, com **reautenticação** antes de `updatePassword`; alternativa por e-mail de redefinição. Só para contas com provedor `password`.\n3. **Segurança — e-mail** (`buildEmailVerificationPanel`): mostra se o e-mail está verificado, **Enviar e-mail de verificação** e **Já verifiquei** (recarrega o usuário e renova o ID token).\n4. **Atalhos:** *Abrir manutenção de dados* (qualquer usuário) e *Abrir playbook (administradores)* (só quem tem a claim `admin`; a barreira real é o servidor)."
+     "md": "1. **Perfil e preferências:** nome, **tema** (`light`/`dark`/`system`), **ocultar valores** e **primeiro dia da semana** (0–6). Gravados em `users/{uid}/profile/main` e `users/{uid}/settings/main` por `js/services/preferences.js` (`getProfile`, `saveProfile`, `getSettings`, `saveSettings`). O tema também fica em `localStorage` (chave da UI) para evitar o flash ao recarregar; o valor da conta prevalece em um dispositivo novo.\n2. **Segurança — senha** (`buildPasswordPanel`): senha atual + nova + confirmação, com **reautenticação** antes de `updatePassword`; alternativa por e-mail de redefinição. Só para contas com provedor `password`.\n3. **Segurança — e-mail** (`buildEmailVerificationPanel`): mostra se o e-mail está verificado, **Enviar e-mail de verificação** e **Já verifiquei** (recarrega o usuário e renova o ID token).\n4. **Atalhos:** *Baixar manual do usuário (PDF)* (`#link-manual`, VF-DOC-02: ver [Runbooks](doc:runbooks#atualizar-o-manual-do-usuario)), *Abrir manutenção de dados* (qualquer usuário) e *Abrir playbook (administradores)* (só quem tem a claim `admin`; a barreira real é o servidor)."
     },
     {
      "id": "regras-espelhadas-das-rules",
@@ -1526,6 +1526,12 @@
      "md": "1. Em `server/finance/ops.mjs`: `defineOp('<dominio>.<acao>', { validate, prepare(ctx, p, operationId) })`. `validate` usa `v.*` (`core.mjs`). `prepare` **lê tudo antes** de escrever e devolve `{ result, apply }`; em todo movimento que altera saldo chame `ctx.touchAccount(contaId)`.\n2. Nunca confie em saldo/status vindo do cliente; use `ctx.balanceOf(conta)` dentro da transação.\n3. Cliente: função no service chamando `financeResult('<op>', params, { operationId })` (`js/services/financeApi.js`); gere o `operationId` ao abrir o formulário.\n4. Rules: o caminho direto equivalente deve estar **negado**.\n5. Testes: recusas em `tests/services/`, saldo/concorrência em `tests/integration/`.\n6. Documente a operação em uma ficha (o teste do playbook exige o nome da operação em algum documento)."
     },
     {
+     "id": "atualizar-o-manual-do-usuario",
+     "heading": "Atualizar o manual do usuário",
+     "level": 2,
+     "md": "O manual para usuários finais (linguagem simples, passo a passo e como as operações se comunicam) é distinto do playbook (que é para quem mantém). Fonte: `docs/manual/manual-usuario.md`; estilo: `docs/manual/manual.css`; resultado: `assets/manual/manual-vault-finance.pdf`, servido em `/assets/manual/manual-vault-finance.pdf` e oferecido em *Configurações → Baixar manual do usuário (PDF)*.\n\n1. Edite o Markdown quando mudar o que o usuário vê (tela, regra, nome de botão). O teste `tests/services/manual.test.mjs` exige que cada item do menu apareça no manual.\n2. `npm run manual:build` (exige `pandoc` e `playwright`/Chromium **na sua máquina**; não são dependências do projeto nem rodam na Vercel) e confira o PDF.\n3. Comite o `.md` **e** o `.pdf`. Não há teste que detecte PDF defasado em relação ao Markdown (o PDF é um artefato binário): confira `git log` dos dois arquivos antes de publicar."
+    },
+    {
      "id": "playbook-defasado-no-ci",
      "heading": "Playbook defasado no CI",
      "level": 2,
@@ -1594,7 +1600,7 @@
      "id": "scripts-npm",
      "heading": "Scripts npm",
      "level": 2,
-     "md": "| Script | Comando |\n| --- | --- |\n| `npm run emulators` | `firebase emulators:start --only auth,firestore` |\n| `npm run test` | `npm run test:unit && npm run test:rules` |\n| `npm run test:unit` | `node --test tests/model/*.test.mjs tests/services/*.test.mjs` |\n| `npm run test:rules` | `firebase emulators:exec --only firestore,auth --project demo-vault-finance \"node --test tests/rules/*.test.…` |\n| `npm run serve` | `npx http-server -p 5500 -c-1 .` |\n| `npm run test:e2e` | `firebase emulators:exec --only firestore,auth --project demo-vault-finance \"node tests/e2e/flows.mjs && nod…` |\n| `npm run lint` | `node scripts/lint.mjs` |\n| `npm run test:integration` | `firebase emulators:exec --only firestore,auth --project demo-vault-finance \"node --test --test-concurrency=…` |\n| `npm run serve:api` | `node scripts/dev-server.mjs` |\n| `npm run docs:build` | `node scripts/gen-playbook.mjs` |\n| `npm run docs:check` | `node scripts/gen-playbook.mjs --check` |"
+     "md": "| Script | Comando |\n| --- | --- |\n| `npm run emulators` | `firebase emulators:start --only auth,firestore` |\n| `npm run test` | `npm run test:unit && npm run test:rules` |\n| `npm run test:unit` | `node --test tests/model/*.test.mjs tests/services/*.test.mjs` |\n| `npm run test:rules` | `firebase emulators:exec --only firestore,auth --project demo-vault-finance \"node --test tests/rules/*.test.…` |\n| `npm run serve` | `npx http-server -p 5500 -c-1 .` |\n| `npm run test:e2e` | `firebase emulators:exec --only firestore,auth --project demo-vault-finance \"node tests/e2e/flows.mjs && nod…` |\n| `npm run lint` | `node scripts/lint.mjs` |\n| `npm run test:integration` | `firebase emulators:exec --only firestore,auth --project demo-vault-finance \"node --test --test-concurrency=…` |\n| `npm run serve:api` | `node scripts/dev-server.mjs` |\n| `npm run docs:build` | `node scripts/gen-playbook.mjs` |\n| `npm run manual:build` | `node scripts/gen-manual.mjs` |\n| `npm run docs:check` | `node scripts/gen-playbook.mjs --check` |"
     },
     {
      "id": "dependencias",
@@ -1606,7 +1612,7 @@
      "id": "testes",
      "heading": "Testes",
      "level": 2,
-     "md": "| Pasta | Arquivos |\n| --- | --- |\n| `tests/model/` | 7 |\n| `tests/services/` | 39 |\n| `tests/rules/` | 1 |\n| `tests/integration/` | 12 |\n| `tests/e2e/` | 20 |"
+     "md": "| Pasta | Arquivos |\n| --- | --- |\n| `tests/model/` | 7 |\n| `tests/services/` | 40 |\n| `tests/rules/` | 1 |\n| `tests/integration/` | 12 |\n| `tests/e2e/` | 20 |"
     },
     {
      "id": "workflows-do-github",
