@@ -30,6 +30,14 @@ Uma camada só importa as da direita/abaixo. Nunca o contrário.
 Não há camada "repositories" separada: `js/services/firestore.js` já é o acesso genérico à persistência (CRUD,
 lote atômico, auditoria) e cada service o usa. Criar outra camada só adicionaria indireção.
 
+## Navegação sem recarregar (VF-PERF-02)
+
+Cada página continua sendo um HTML (`pages/<x>.html`), mas depois da primeira os cliques em links internos **não recarregam o documento**:
+`js/app.js` intercepta o clique (`js/utils/pageRoutes.js`, puro), e `js/components/page-host.js` troca só o conteúdo de
+`#page-content` (autenticação, SDK e menu continuam vivos). **Contrato das páginas:** `render(container, { user, signal })`
+desenha **somente** no `container` recebido (nunca no `<main>` global) e registra listeners de `document`/`window` com `{ signal }`.
+Detalhes e o porquê no playbook (Arquitetura › Navegação sem recarregar).
+
 ## Modelo financeiro (`js/core/model.js` → `js/core/model/`)
 
 `model.js` é apenas um **barrel**: reexporta os submódulos e é o contrato público (`import … from '…/core/model.js'`).

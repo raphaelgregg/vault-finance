@@ -122,10 +122,10 @@ Não há backup automático no plano Spark. A exportação existente é por **CS
 ## Adicionar uma página nova
 
 1. `pages/<id>.html`: copie uma página existente e ajuste `<title>` e `data-page="<id>"`. **Sem script inline** (CSP).
-2. `js/modules/<id>.js` exportando `render(container, { user })`.
+2. `js/modules/<id>.js` exportando `render(container, { user, signal })` e **respeitando o contrato de página** (desenhar só no contêiner recebido; listeners globais com `signal`; ver [Arquitetura](doc:arquitetura#contrato-de-uma-pagina-obrigatorio)).
 3. Registre em `MODULES` (`js/app.js`).
 4. `vercel.json`: rewrite `/<id>` → `/pages/<id>` (sem `.html`).
-5. Se for item de menu: `js/utils/nav.js` (`NAV_ITEMS`); senão adicione a página aos testes de rotas como as páginas internas.
+5. Se for item de menu: `js/utils/nav.js` (`NAV_ITEMS`); senão adicione a página aos testes de rotas como as páginas internas. A navegação sem recarregar passa a servi-la sozinha (basta estar em `MODULES`).
 6. **Documente:** crie `docs/playbook/funcionalidades/<nn>-<id>.md` com `page: <id>` no front matter. O teste do playbook **falha** sem a ficha.
 7. `npm run docs:build` e comite o resultado.
 

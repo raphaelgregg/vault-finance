@@ -34,6 +34,7 @@ Sem dependências. Verifica: sintaxe de todo `.js`/`.mjs` (`node --check`), sem 
   - `security-headers.test.mjs`: hash CSP do import map, SRI do `lucide` e dos módulos Firebase.
   - `model-structure.test.mjs`: lista de exports do barrel `js/core/model.js`.
   - `playbook.test.mjs`: o playbook gerado está em dia e toda página, coleção, operação e variável de ambiente está documentada.
+  - `page-routes.test.mjs`: rotas da navegação sem recarregar e o contrato das páginas (nenhum módulo usa o `<main>` global; listeners globais só com `signal`).
   - `security-hardening.test.mjs`: o servidor carrega **sem** `require()` de módulo ESM (regressão do `ERR_REQUIRE_ESM`).
 
 ## Rules (`tests/rules/`)
@@ -46,7 +47,7 @@ Servidor real (`handleFinance`, `handleValidation`) com o Admin SDK contra o **e
 
 ## E2E (`tests/e2e/`)
 
-`harness.mjs` sobe um servidor estático + `/api/finance` (o mesmo handler da Vercel) e controla o Chromium via Playwright. O SDK do Firebase é servido do `node_modules/firebase` local (versão pode diferir da fixada no import map; a chave `integrity` é removida **só no harness**). Cenários: login/cadastro e troca de senha (`auth.mjs`), fluxos principais (`flows.mjs`), movimentos, devedores, manutenção, Central de validação, CSV, estornos e visibilidade, todas as páginas, tabelas, responsividade, confirmações, edição de compra no cartão e campos de data. **Não rodam no CI** (exigem navegador). Se `playwright` não existir, os scripts saem com aviso.
+`harness.mjs` sobe um servidor estático + `/api/finance` (o mesmo handler da Vercel) e controla o Chromium via Playwright. O SDK do Firebase é servido do `node_modules/firebase` local (versão pode diferir da fixada no import map; a chave `integrity` é removida **só no harness**). Cenários: **navegação sem recarregar** (`navigation.mjs`: o documento não recarrega, voltar/avançar, cliques concorrentes, modal, `#novo`, playbook, sair), login/cadastro e troca de senha (`auth.mjs`), fluxos principais (`flows.mjs`), movimentos, devedores, manutenção, Central de validação, CSV, estornos e visibilidade, todas as páginas, tabelas, responsividade, confirmações, edição de compra no cartão e campos de data. **Não rodam no CI** (exigem navegador). Se `playwright` não existir, os scripts saem com aviso.
 
 ## Como escrever um teste novo
 

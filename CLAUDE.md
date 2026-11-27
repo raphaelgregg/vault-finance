@@ -49,6 +49,7 @@ Também declarados: `npm run lint`, `npm run test:unit`, `npm run test:integrati
 - Não introduza dependências (incluindo libs via CDN) sem aprovação.
 - Sem refatorações oportunistas; sem trocar funcionalidades por versões simplificadas.
 - Não altere estruturas importantes sem justificativa técnica.
+- **Páginas (`js/modules/*`):** `render(container, { user, signal })` desenha só no `container` recebido (nunca no `<main>` global) e usa `{ signal }` em listeners de `document`/`window` (navegação sem recarregar; `tests/services/page-routes.test.mjs` verifica).
 - Preserve compatibilidade: Rules com schemas fechados, centavos inteiros, saldo derivado, `auditLog` create-only.
 - Alterações em `firestore.rules` exigem teste correspondente em `tests/rules/`.
 - Nunca colocar service account, Admin SDK ou segredos no frontend.

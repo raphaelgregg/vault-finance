@@ -154,7 +154,7 @@ O workflow `.github/workflows/ci.yml` roda lint, unit e Rules (Node 24 e 26, LTS
 │   ├── firebase/               # config.js (placeholders), client.js (SDK + emuladores)
 │   ├── services/               # firestore.js (CRUD, lote atômico, auditoria) + um service por módulo
 │   ├── components/             # dom.js (el/$/toast), sidebar, topbar, tema, modal, form-kit (formulários/dataTable), table-tools (ordenação e filtro de tabelas)
-│   ├── modules/                # um módulo por página (+ devedores-parcelas.js)
+│   ├── modules/                # um módulo por página (+ devedores-parcelas.js); contrato: render(container, { user, signal })
 │   └── utils/                  # constants, money (centavos: parse/format), dates, csv, zip, pdf, nav… (puros)
 ├── api/                        # funções Vercel (finance, validation, admin-claims): só adaptam req/res
 ├── server/                     # lógica de servidor (Admin SDK): finance/, validation/, admin/
@@ -316,7 +316,8 @@ O projeto não habilita nada fora do Spark e não faz chamadas pagas.
 6. **Sem dependências novas sem aprovação** (nem libs via CDN): gráficos são barras CSS, CSV, ZIP e **PDF**
    são gerados no cliente por código próprio (`js/utils/csv.js`, `zip.js`, `pdf.js`), lint é um script próprio,
    E2E reaproveita o Playwright do ambiente.
-7. **Sem botão sem implementação** — a busca global ainda não existe e avisa isso. A exportação em PDF existe só para as dívidas de um devedor.
+7. **Navegação sem recarregar (VF-PERF-02):** depois da primeira página, os links internos trocam só o conteúdo (`js/app.js` + `js/components/page-host.js`); cada página segue sendo um HTML (carga direta, F5). Contrato das páginas: `render(container, { user, signal })`. Ver o playbook (Arquitetura).
+8. **Sem botão sem implementação** — a busca global ainda não existe e avisa isso. A exportação em PDF existe só para as dívidas de um devedor.
 
 ---
 

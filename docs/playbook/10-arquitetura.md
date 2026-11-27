@@ -37,12 +37,37 @@ As Rules **recusam** no caminho A tudo que o caminho B faz: por exemplo, `status
 
 ## Como uma página é montada
 
-1. `pages/<x>.html` é uma casca: `<body data-page="<x>">`, `#sidebar`, `#topbar`, `#page-content` e os scripts (`importmap.js`, `app.js`).
-2. `js/app.js` aplica o tema, conecta os emuladores (só em `localhost`), chama `requireSession()` (`js/core/guard.js`), monta sidebar, topbar e navegação móvel, e então importa **dinamicamente** o módulo da página pelo mapa `MODULES` (`js/app.js`).
-3. O módulo exporta `render(container, { user })` e cuida de estado, renderização e eventos.
-4. Nenhum módulo é importado antes da autenticação.
+1. `pages/<x>.html` é uma casca: `<body data-page="<x>">`, `#sidebar`, `#topbar`, `#page-content` e os scripts (`importmap.js`, `app.js`). Cada página continua sendo um HTML: carga direta, atualizar (F5) e favoritos funcionam.
+2. `js/app.js` aplica o tema, conecta os emuladores (só em `localhost`) e **já começa a baixar o módulo da página em paralelo à autenticação** (VF-PERF-01: só o *download*; `render`, que lê dados, só roda depois da sessão). Em seguida `requireSession()` (`js/core/guard.js`), monta sidebar, topbar e barra inferior, e entrega a página ao **anfitrião** (`js/components/page-host.js`).
+3. O módulo exporta `render(container, { user, signal })` e cuida de estado, renderização e eventos.
+4. As configurações salvas na conta (tema) chegam depois, **sem bloquear** o menu.
 
 `vercel.json` serve as URLs limpas (`/despesas` → `/pages/despesas`). O teste `tests/services/routes.test.mjs` mantém menu, página, rewrite e módulo em sincronia.
+
+## Navegação sem recarregar (VF-PERF-02)
+
+Depois da primeira página, **clicar num link do app não recarrega o documento**: HTML, SDK do Firebase, autenticação e menu continuam vivos e só o conteúdo muda.
+
+- **Interceptação:** `app.js` ouve cliques em `a[href]`; `internalTarget` (`js/utils/pageRoutes.js`, puro) decide se é uma página do app (mesma origem, clique simples, sem `target`/`download`, sem Ctrl/Cmd/Shift/Alt). Qualquer outro caso segue o comportamento normal do navegador. O endereço muda por `history.pushState` (`/despesas` na Vercel, `/pages/despesas.html` no servidor local).
+- **Anfitrião** (`createPageHost`): importa o módulo (em cache depois da primeira vez), **encerra a página anterior** (aborta o `signal`, chama `destroy()` se existir, fecha modal aberto), cria um **contêiner novo** (`div.page-root`, `display: contents` para não mudar o layout), atualiza `document.title`, título da topbar, item ativo do menu e `body[data-page]` (o CSS depende dele), e renderiza. Chamadas simultâneas: **vale a última**; a anterior é descartada sem tocar na tela.
+- **Voltar/avançar:** `popstate` troca a página; se só o `hash` mudou dentro da mesma página (ex.: playbook), a própria página trata.
+- **Rede de segurança:** se a navegação interna falhar (módulo ou `render` com erro), o app faz uma **carga completa** da URL. Sem anfitrião funcional, os links seguem como carga completa.
+- **Aquecimento:** passar o mouse, focar ou tocar num link já começa a baixar o módulo dele.
+- **Sessão:** como o documento vive mais tempo, um observador de sessão volta ao login se o usuário sair (inclusive em outra aba). O botão *Sair* e o observador usam `body[data-leaving]` para navegar uma única vez.
+- **Acessibilidade:** ao navegar, o foco vai para `#page-content` e a rolagem volta ao topo; uma barra fina de progresso só aparece se a troca demorar mais de 150 ms.
+
+### Contrato de uma página (obrigatório)
+
+1. `export async function render(container, { user, signal })`: desenhe **só em `container`**, o elemento novo desta visita. **Nunca** procure o `<main>` global (`$('.content')`, `getElementById('page-content')`, `$('#page-content')`): uma página antiga que termine de carregar *depois* da navegação escreveria por cima da nova. Guarde o contêiner numa variável do módulo (`pageRoot`/`container`) e use-a nos redesenhos.
+2. Listeners em `document`/`window` **sempre com `{ signal }`** (o anfitrião os remove ao sair). Timers e assinaturas: limpe em `export function destroy()`.
+3. Estado de módulo (variáveis no topo do arquivo) **sobrevive** entre visitas (o módulo fica em cache): reinicialize o que não deve ser lembrado dentro de `render`. Filtros escolhidos continuam valendo na sessão.
+4. Opcional: `export const meta = { title, icon }` (título da topbar e da aba).
+
+Os testes `tests/services/page-routes.test.mjs` (regras acima) e `tests/e2e/navigation.mjs` (navegador real) protegem esse contrato.
+
+### Medir a velocidade
+
+O app grava marcas de tempo (User Timing): `vf:boot`, `vf:session`, `vf:shell`, `vf:content` na carga e `vf:nav` (medida) a cada troca interna. No Chrome: DevTools → *Performance* → gravar → *Timings*; ou, no console, `performance.getEntriesByName('vf:nav')`. Medições locais (rede simulada com 80 ms de latência) mostraram: o menu aparecer sem esperar a leitura de configurações poupa ~35% do tempo até o menu; `modulepreload` isolado rende ~5% (e exigiria um import map estático, porque o atual é injetado por script).
 
 ## Padrões que se repetem
 
