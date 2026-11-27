@@ -341,3 +341,28 @@ p {
 }
 
 .sidebar__collapse { width: 100%; justify-content: flex-start; gap: 12px; }
+
+/* VF-PERF-02 — navegação sem recarregar. Cada visita a uma página ganha um contêiner próprio (.page-root); "contents"
+   mantém os filhos como itens do flex de .content, então o layout não muda. */
+.page-root { display: contents; }
+
+/* Barra fina de progresso: só aparece se a troca de página demorar mais de 150 ms (o início da animação fica invisível). */
+body[data-navigating="true"]::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1000;
+  width: 100%;
+  height: 3px;
+  background: var(--brand-500);
+  transform-origin: left;
+  animation: nav-progress 1.2s ease-out 150ms both;
+}
+@keyframes nav-progress {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(0.85); }
+}
+@media (prefers-reduced-motion: reduce) {
+  body[data-navigating="true"]::before { animation: none; transform: scaleX(0.5); opacity: 0.6; }
+}

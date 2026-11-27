@@ -1576,7 +1576,7 @@
      "id": "testes",
      "heading": "Testes",
      "level": 2,
-     "md": "| Pasta | Arquivos |\n| --- | --- |\n| `tests/model/` | 6 |\n| `tests/services/` | 38 |\n| `tests/rules/` | 1 |\n| `tests/integration/` | 12 |\n| `tests/e2e/` | 18 |"
+     "md": "| Pasta | Arquivos |\n| --- | --- |\n| `tests/model/` | 6 |\n| `tests/services/` | 39 |\n| `tests/rules/` | 1 |\n| `tests/integration/` | 12 |\n| `tests/e2e/` | 19 |"
     },
     {
      "id": "workflows-do-github",

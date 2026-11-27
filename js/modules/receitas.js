@@ -35,6 +35,7 @@ import { openReversalModal } from '../components/reversal-modal.js';
 export const meta = { title: 'Receitas', icon: 'trending-up' };
 
 let currentUser = null;
+let pageRoot = null; // contêiner DESTA página: redesenhar sempre nele, nunca no <main> global (VF-PERF-02)
 let incomesCache = [];
 let pager = null;
 let categoriesCache = [];
@@ -44,6 +45,7 @@ let currentFilter = { status: 'all', month: null, categoryId: null };
 /** Render principal do módulo. */
 export async function render(container, { user }) {
   currentUser = user;
+  pageRoot = container;
   await loadData();
   renderPage(container);
 }
@@ -66,7 +68,7 @@ async function loadData() {
 async function loadMore() {
   await pager.loadMore();
   incomesCache = pager.items;
-  renderPage($('.content') || document.getElementById('page-content'));
+  renderPage(pageRoot);
 }
 
 /** Aplica filtros atuais. */
@@ -332,7 +334,7 @@ function createIncomeActions(income) {
         onClick: () => openReversalModal({
           user: currentUser, kind: 'income', targetId: income.id, amountCents: Number(income.amountCents) || 0,
           summary: `${income.description} — ${formatCents(Number(income.amountCents) || 0)} (${accountLabelOf(income.accountId)})`,
-          onDone: async () => { await loadData(); renderPage($('.content') || document.getElementById('page-content')); },
+          onDone: async () => { await loadData(); renderPage(pageRoot); },
         }),
         html: '<i data-lucide="undo-2" aria-hidden="true"></i>',
       })
@@ -531,7 +533,7 @@ function openIncomeModal(income = null) {
       toast(isEdit ? 'Receita atualizada com sucesso.' : 'Receita criada com sucesso.');
       closeModal();
       await loadData();
-      renderPage($('.content') || document.getElementById('page-content'));
+      renderPage(pageRoot);
     } else {
       showErrors(form, result.errors);
     }
@@ -549,7 +551,7 @@ async function confirmMarkReceived(income) {
   if (result.ok) {
     toast('Receita marcada como recebida.');
     await loadData();
-    renderPage($('.content') || document.getElementById('page-content'));
+    renderPage(pageRoot);
   } else {
     toast(result.errors?._form ?? 'Erro ao marcar como recebida.', 5000);
   }
@@ -567,7 +569,7 @@ function confirmCancelIncome(income) {
       if (result.ok) {
         toast('Receita cancelada.');
         await loadData();
-        renderPage($('.content') || document.getElementById('page-content'));
+        renderPage(pageRoot);
       } else {
         toast(result.errors?._form ?? 'Erro ao cancelar.', 5000);
       }
@@ -596,7 +598,7 @@ function confirmDeleteIncome(income) {
         if (result.ok) {
           toast(result.reversedCents ? `Receita excluída — ${formatCents(result.reversedCents)} estornados em ${accountLabelOf(result.accountId)}.` : 'Receita excluída.');
           await loadData();
-          renderPage($('.content') || document.getElementById('page-content'));
+          renderPage(pageRoot);
         } else {
           toast(`Erro: ${result.errors._form}`, 5000);
         }

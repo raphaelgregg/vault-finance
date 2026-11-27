@@ -83,7 +83,10 @@ function highlighted(text, terms) {
 // Página
 // ---------------------------------------------------------------------------------------------------------------
 
-export async function render(container, { user }) {
+export const meta = { title: 'Playbook', icon: 'book-open' };
+
+/** `signal` (navegação sem recarregar, VF-PERF-02): aborta ao sair da página e remove os listeners globais. */
+export async function render(container, { user, signal } = {}) {
   container.replaceChildren(el('p', { class: 'card__hint', text: 'Carregando o playbook…' }));
 
   if (!(await isAdminUser(user))) {
@@ -222,8 +225,8 @@ export async function render(container, { user }) {
   categorySelect.addEventListener('change', () => { state.category = categorySelect.value; runSearch(); });
   document.addEventListener('keydown', (event) => {
     if (event.key === '/' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) { event.preventDefault(); searchInput.focus(); }
-  });
-  window.addEventListener('popstate', () => route());
+  }, { signal });
+  window.addEventListener('popstate', () => route(), { signal });
 
   function route() {
     const match = /^#doc\/([a-z0-9-]+)(?:\/([a-z0-9-]+))?$/.exec(location.hash);

@@ -39,6 +39,7 @@ import { describeError } from '../utils/errors.js';
 export const meta = { title: 'Transferências', icon: 'arrow-left-right' };
 
 let currentUser = null;
+let pageRoot = null; // contêiner DESTA página: redesenhar sempre nele, nunca no <main> global (VF-PERF-02)
 let transfersCache = [];
 let pager = null;
 let accountsCache = [];
@@ -55,6 +56,7 @@ let currentFilter = { status: 'all', month: null };
 /** Render principal do módulo. */
 export async function render(container, { user }) {
   currentUser = user;
+  pageRoot = container;
   try {
     await loadData();
   } catch (error) {
@@ -100,7 +102,7 @@ const goalName = (id) => goalsCache.find((g) => g.id === id)?.name ?? id;
 async function loadMore() {
   await pager.loadMore();
   transfersCache = pager.items;
-  renderPage($('.content') || document.getElementById('page-content'));
+  renderPage(pageRoot);
 }
 
 /** Renderiza a página completa. */
@@ -174,7 +176,7 @@ function createGoalMovementsPanel() {
         onClick: () => openReversalModal({
           user: currentUser, kind: 'goalTransaction', targetId: t.id, amountCents: Number(t.amountCents) || 0,
           summary: `${t.type === 'deposit' ? 'Aporte' : 'Resgate'} — ${goalName(t.goalId)} — ${formatCents(Number(t.amountCents) || 0)}`,
-          onDone: async () => { await loadData(); renderPage($('.content') || document.getElementById('page-content')); },
+          onDone: async () => { await loadData(); renderPage(pageRoot); },
         }),
         html: '<i data-lucide="undo-2" aria-hidden="true"></i>',
       })]),
@@ -379,7 +381,7 @@ function createTransferActions(transfer) {
         onClick: () => openReversalModal({
           user: currentUser, kind: 'transfer', targetId: transfer.id, amountCents: Number(transfer.amountCents) || 0,
           summary: `${getAccountLabel(transfer.fromAccountId)} → ${getAccountLabel(transfer.toAccountId)} — ${formatCents(Number(transfer.amountCents) || 0)}`,
-          onDone: async () => { await loadData(); renderPage($('.content') || document.getElementById('page-content')); },
+          onDone: async () => { await loadData(); renderPage(pageRoot); },
         }),
         html: '<i data-lucide="undo-2" aria-hidden="true"></i>',
       })
@@ -586,7 +588,7 @@ function openTransferModal(transfer = null) {
         : (isEdit ? 'Transferência atualizada com sucesso.' : 'Transferência criada com sucesso.'));
       closeModal();
       await loadData();
-      renderPage($('.content') || document.getElementById('page-content'));
+      renderPage(pageRoot);
     } else {
       showErrors(form, result.errors);
     }
@@ -634,7 +636,7 @@ async function confirmTransferAction(transfer) {
   if (result.ok) {
     toast('Transferência confirmada — saldo das contas atualizado.');
     await loadData();
-    renderPage($('.content') || document.getElementById('page-content'));
+    renderPage(pageRoot);
   } else {
     toast(result.errors?._form || 'Erro ao confirmar transferência.', 5000);
   }
@@ -652,7 +654,7 @@ function confirmCancelTransfer(transfer) {
       if (result.ok) {
         toast('Transferência cancelada.');
         await loadData();
-        renderPage($('.content') || document.getElementById('page-content'));
+        renderPage(pageRoot);
       } else {
         toast(result.errors?._form || 'Erro ao cancelar.', 5000);
       }
@@ -680,7 +682,7 @@ function confirmDeleteTransfer(transfer) {
         if (result.ok) {
           toast(result.reversed ? `Transferência excluída — ${formatCents(result.amountCents)} estornados entre as contas.` : 'Transferência excluída.');
           await loadData();
-          renderPage($('.content') || document.getElementById('page-content'));
+          renderPage(pageRoot);
         } else {
           toast(`Erro: ${result.errors._form}`, 5000);
         }

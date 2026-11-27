@@ -32,6 +32,7 @@ import {
 export const meta = { title: 'Bancos', icon: 'landmark' };
 
 let currentUser = null;
+let pageRoot = null; // contêiner DESTA página: redesenhar sempre nele, nunca no <main> global (VF-PERF-02)
 let accountsCache = [];
 let balanceError = null; // { kind: 'denied' | 'error', text } — por que o saldo atual está indisponível (nunca presumir "sem estornos")
 let showArchived = false; // contas arquivadas (arquivamento lógico) ficam ocultas por padrão
@@ -43,6 +44,7 @@ let derived = null;
 /** Render principal do módulo. */
 export async function render(container, { user }) {
   currentUser = user;
+  pageRoot = container;
   await loadData();
   renderPage(container);
 }
@@ -68,11 +70,11 @@ async function calculateBalances({ silent = false } = {}) {
     balanceError = describeBalanceError(error);
     if (!silent) {
       toast(balanceError.toast, 6000);
-      renderPage($('.content') || document.getElementById('page-content')); // redesenha: o saldo exibido antes NÃO pode permanecer na tela
+      renderPage(pageRoot); // redesenha: o saldo exibido antes NÃO pode permanecer na tela
     }
     return;
   }
-  if (!silent) renderPage($('.content') || document.getElementById('page-content'));
+  if (!silent) renderPage(pageRoot);
   if (derived.truncated.length) toast('Leitura limitada: o saldo pode estar incompleto.', 6000);
 }
 
@@ -160,7 +162,7 @@ function renderPage(container) {
         el('h2', { text: 'Contas cadastradas' }),
         el('div', { class: 'topbar__spacer' }),
         el('label', { class: 'form__check' }, [
-          el('input', { type: 'checkbox', id: 'show-archived-accounts', ...(showArchived ? { checked: 'checked' } : {}), onChange: (e) => { showArchived = e.target.checked; renderPage($('.content') || document.getElementById('page-content')); } }),
+          el('input', { type: 'checkbox', id: 'show-archived-accounts', ...(showArchived ? { checked: 'checked' } : {}), onChange: (e) => { showArchived = e.target.checked; renderPage(pageRoot); } }),
           el('span', { text: ' Mostrar arquivadas' }),
         ]),
         el('span', { class: 'badge', text: `${accountsCache.length} registro${accountsCache.length !== 1 ? 's' : ''}` }),
@@ -316,7 +318,7 @@ function openAdjustModal(account) {
       toast(`Saldo de abertura ajustado para ${formatCents(result.newInitialCents)}.`);
       closeModal();
       await loadData();
-      renderPage($('.content') || document.getElementById('page-content'));
+      renderPage(pageRoot);
     } else {
       showErrors(form, result.errors);
     }
@@ -474,7 +476,7 @@ function openAccountModal(account = null) {
       toast(isEdit ? 'Conta atualizada com sucesso.' : 'Conta criada com sucesso.');
       closeModal();
       await loadData();
-      renderPage($('.content') || document.getElementById('page-content'));
+      renderPage(pageRoot);
     } else {
       showErrors(form, result.errors);
     }
@@ -492,7 +494,7 @@ async function toggleArchive(account) {
   if (result.ok) {
     toast(account.status === 'archived' ? 'Conta desarquivada.' : 'Conta arquivada: o histórico foi preservado.');
     await loadData();
-    renderPage($('.content') || document.getElementById('page-content'));
+    renderPage(pageRoot);
   } else {
     toast(result.errors?._form ?? 'Não foi possível alterar o arquivamento.', 5000);
   }
@@ -516,7 +518,7 @@ function confirmDeleteAccount(account) {
         if (result.ok) {
           toast('Conta excluída.');
           await loadData();
-          renderPage($('.content') || document.getElementById('page-content'));
+          renderPage(pageRoot);
         } else {
           toast(`Erro: ${result.errors._form}`, 5000);
         }

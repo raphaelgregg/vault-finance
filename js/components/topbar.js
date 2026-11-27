@@ -41,4 +41,8 @@ export function mountTopbar(root, { title, user, onMenuClick } = {}) {
   mountThemeToggle(root);
   root.append(logout);
   refreshIcons();
+  return {
+    /** Troca o título da página (navegação sem recarregar, VF-PERF-02). */
+    setTitle(text) { heading.textContent = text ?? 'Vault Finance'; },
+  };
 }

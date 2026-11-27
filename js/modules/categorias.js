@@ -18,11 +18,13 @@ import {
 export const meta = { title: 'Categorias', icon: 'tags' };
 
 let currentUser = null;
+let pageRoot = null; // contêiner DESTA página: redesenhar sempre nele, nunca no <main> global (VF-PERF-02)
 let categoriesCache = [];
 
 /** Render principal do módulo. */
 export async function render(container, { user }) {
   currentUser = user;
+  pageRoot = container;
   await loadData();
   renderPage(container);
 }
@@ -271,7 +273,7 @@ function openCategoryModal(category = null) {
     toast(isEdit ? 'Categoria atualizada.' : 'Categoria criada.');
     closeModal();
     await loadData();
-    renderPage($('#page-content'));
+    renderPage(pageRoot);
   }
 
   form.addEventListener('submit', handleSubmit);
@@ -316,7 +318,7 @@ function confirmDeleteCategory(category) {
     toast('Categoria excluída.');
     closeModal();
     await loadData();
-    renderPage($('#page-content'));
+    renderPage(pageRoot);
   });
 
   openModal({

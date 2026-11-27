@@ -35,6 +35,7 @@ import { openReversalModal } from '../components/reversal-modal.js';
 export const meta = { title: 'Despesas', icon: 'trending-down' };
 
 let currentUser = null;
+let pageRoot = null; // contêiner DESTA página: redesenhar sempre nele, nunca no <main> global (VF-PERF-02)
 let expensesCache = [];
 let pager = null;
 let categoriesCache = [];
@@ -44,6 +45,7 @@ let currentFilter = { status: 'all', month: null, categoryId: null };
 /** Render principal do módulo. */
 export async function render(container, { user }) {
   currentUser = user;
+  pageRoot = container;
   await loadData();
   renderPage(container);
 }
@@ -68,7 +70,7 @@ async function loadData() {
 async function loadMore() {
   await pager.loadMore();
   expensesCache = [...pager.items].reverse();
-  renderPage($('.content') || document.getElementById('page-content'));
+  renderPage(pageRoot);
 }
 
 /** Renderiza a página completa. */
@@ -330,7 +332,7 @@ function createExpenseActions(expense) {
         onClick: () => openReversalModal({
           user: currentUser, kind: 'expense', targetId: expense.id, amountCents: Number(expense.amountCents) || 0,
           summary: `${expense.description} — ${formatCents(Number(expense.amountCents) || 0)} (${getAccountLabel(expense.accountId)})`,
-          onDone: async () => { await loadData(); renderPage($('.content') || document.getElementById('page-content')); },
+          onDone: async () => { await loadData(); renderPage(pageRoot); },
         }),
         html: '<i data-lucide="undo-2" aria-hidden="true"></i>',
       })
@@ -553,7 +555,7 @@ function openExpenseModal(expense = null) {
       toast(isEdit ? 'Despesa atualizada com sucesso.' : 'Despesa criada com sucesso.');
       closeModal();
       await loadData();
-      renderPage($('.content') || document.getElementById('page-content'));
+      renderPage(pageRoot);
     } else {
       showErrors(form, result.errors);
     }
@@ -571,7 +573,7 @@ async function confirmMarkPaid(expense) {
   if (result.ok) {
     toast('Despesa marcada como paga.');
     await loadData();
-    renderPage($('.content') || document.getElementById('page-content'));
+    renderPage(pageRoot);
   } else {
     toast(result.errors?._form ?? 'Erro ao marcar como paga.', 5000);
   }
@@ -589,7 +591,7 @@ function confirmCancelExpense(expense) {
       if (result.ok) {
         toast('Despesa cancelada.');
         await loadData();
-        renderPage($('.content') || document.getElementById('page-content'));
+        renderPage(pageRoot);
       } else {
         toast(result.errors?._form ?? 'Erro ao cancelar.', 5000);
       }
@@ -618,7 +620,7 @@ function confirmDeleteExpense(expense) {
         if (result.ok) {
           toast(result.reversedCents ? `Despesa excluída — ${formatCents(result.reversedCents)} estornados em ${getAccountLabel(result.accountId)}.` : 'Despesa excluída.');
           await loadData();
-          renderPage($('.content') || document.getElementById('page-content'));
+          renderPage(pageRoot);
         } else {
           toast(`Erro: ${result.errors._form}`, 5000);
         }

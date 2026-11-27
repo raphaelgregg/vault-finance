@@ -16,6 +16,7 @@ export function mountSidebar(root, { activeId } = {}) {
   ]);
 
   const nav = el('nav', { class: 'sidebar__nav', 'aria-label': 'Menu principal' });
+  const links = new Map();
   for (const item of NAV_ITEMS) {
     const isActive = item.id === activeId;
     const link = el(
@@ -31,6 +32,7 @@ export function mountSidebar(root, { activeId } = {}) {
         el('span', { text: item.label }),
       ]
     );
+    links.set(item.id, link);
     nav.append(link);
   }
 
@@ -52,6 +54,12 @@ export function mountSidebar(root, { activeId } = {}) {
   refreshIcons();
 
   return {
+    /** Marca o item da página atual (navegação sem recarregar, VF-PERF-02); páginas fora do menu desmarcam todos. */
+    setActive(id) {
+      for (const [itemId, link] of links) {
+        if (itemId === id) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
+      }
+    },
     closeMobile() {
       app.dataset.mobileOpen = 'false';
     },
