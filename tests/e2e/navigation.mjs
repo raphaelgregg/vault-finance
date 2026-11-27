@@ -18,7 +18,7 @@ const state = () => page.evaluate(() => ({
   marker: window.__vfMarker, page: document.body.dataset.page, title: document.title, heading: document.querySelector('.topbar__title')?.textContent,
   current: [...document.querySelectorAll('#sidebar [aria-current="page"]')].map((a) => a.getAttribute('href')), path: location.pathname,
 }));
-const click = (id) => page.locator(`#sidebar a[href="${id}.html"]`).click();
+const click = (id) => page.locator(`#sidebar .nav-item[href="${id}.html"]`).click();
 
 try {
   await registerUser(page, app.base);
@@ -53,9 +53,9 @@ try {
 
   log('cliques concorrentes: vale a última página; a anterior não escreve por cima');
   await page.evaluate(() => {
-    document.querySelector('#sidebar a[href="despesas.html"]').click();
-    document.querySelector('#sidebar a[href="bancos.html"]').click();
-    document.querySelector('#sidebar a[href="transferencias.html"]').click();
+    document.querySelector('#sidebar .nav-item[href="despesas.html"]').click();
+    document.querySelector('#sidebar .nav-item[href="bancos.html"]').click();
+    document.querySelector('#sidebar .nav-item[href="transferencias.html"]').click();
   });
   await settled('transferencias');
   await page.waitForTimeout(1500); // dá tempo de uma página antiga terminar de carregar e tentar escrever
@@ -68,7 +68,7 @@ try {
   await click('despesas'); await settled('despesas');
   await page.getByRole('button', { name: /Nova despesa/ }).first().click();
   await page.waitForSelector('.modal');
-  await page.evaluate(() => document.querySelector('#sidebar a[href="receitas.html"]').click());
+  await page.evaluate(() => document.querySelector('#sidebar .nav-item[href="receitas.html"]').click());
   await settled('receitas');
   assert.equal(await page.locator('.modal').count(), 0, 'modal da página anterior ficou aberto');
   assert.equal(await page.evaluate(() => document.body.classList.contains('modal-open')), false);
