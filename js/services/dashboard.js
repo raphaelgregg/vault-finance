@@ -146,10 +146,11 @@ export async function loadDashboard(uid, io = {}) {
     ? cardsOverview({ cards: cardInvoices.cards, invoices: cardInvoices.invoices, purchases: cardInvoices.purchases, today, usedFn: cardLimitUsage })
     : null;
   const debtorsSummary = debtors ? summarizeDebtors(debtors) : null;
-  // Posição líquida = saldo das contas + a receber de devedores − faturas de cartão ainda não pagas (só com as três fontes).
-  const netPositionCents = totalCents !== null && debtorsSummary && cardsView
-    ? totalCents + debtorsSummary.pendingCents - cardsView.dueCents
-    : null;
+  // Posição líquida (curto prazo) = saldo das contas + a receber de devedores NO MÊS − faturas de cartão a pagar.
+  // O total em aberto dos devedores (sem prazo) não entra no número principal: vai à parte em `netPositionWithAllDebtorsCents`.
+  const hasSources = totalCents !== null && cardsView;
+  const netPositionCents = hasSources && debtorMonth !== null ? totalCents + debtorMonth - cardsView.dueCents : null;
+  const netPositionWithAllDebtorsCents = hasSources && debtorsSummary ? totalCents + debtorsSummary.pendingCents - cardsView.dueCents : null;
 
   return {
     period,
@@ -162,6 +163,7 @@ export async function loadDashboard(uid, io = {}) {
     subscriptionsList: subscriptions ? subscriptionsOverview(subscriptions, subscriptionMonthlyCents) : null,
     subscriptionsSummary: subscriptions ? summarizeSubscriptions(subscriptions) : null,
     netPositionCents,
+    netPositionWithAllDebtorsCents,
     month,
     isCurrentMonth: month === currentMonth,
     accountCount: accounts ? accounts.filter((a) => a.status === 'active').length : null,
