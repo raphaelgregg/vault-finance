@@ -10,7 +10,6 @@
  * `js/utils/pdf.js`. Dinheiro em centavos inteiros; nada é gravado.
  */
 import { formatCents } from '../utils/money.js';
-import { formatDateBR, formatMonthBR } from '../utils/dates.js';
 import { PdfDocument, PAGE_A4 } from '../utils/pdf.js';
 import { debtorPendingCents } from './model/debtors.js';
 
@@ -21,8 +20,22 @@ const KIND_LABELS = Object.freeze({ cash: 'Dívida à vista', installment: 'Dív
 const INVOICE_LABELS = Object.freeze({ open: 'fatura aberta', closed: 'fatura fechada', paid: 'fatura paga' });
 const DEBTOR_STATUS_LABELS = Object.freeze({ open: 'Em aberto', paid: 'Quitado', cancelled: 'Cancelado' });
 
-const capitalize = (text) => (text ? text.charAt(0).toUpperCase() + text.slice(1) : text);
-const monthLabel = (month) => (typeof month === 'string' && /^\d{4}-\d{2}$/.test(month) ? capitalize(formatMonthBR(month)) : 'Sem mês definido');
+const MONTH_NAMES = Object.freeze(['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']);
+
+/**
+ * "AAAA-MM-DD" → "DD/MM/AAAA" por TEXTO. Nunca use `new Date(...)`/`Intl` em datas só-dia: "2026-12-05" vira meia-noite UTC e,
+ * no Brasil (UTC−3), é formatada como 04/12. O relatório mostrou o mês e os dias errados por isso (VF-FEAT-01).
+ */
+export function isoDateText(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso ?? ''));
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : '—';
+}
+
+/** "AAAA-MM" → "Dezembro de 2026" por texto (independe do fuso do navegador). */
+export function monthLabel(month) {
+  const m = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(String(month ?? ''));
+  return m ? `${MONTH_NAMES[Number(m[2]) - 1]} de ${m[1]}` : 'Sem mês definido';
+}
 const sum = (rows, key) => rows.reduce((t, r) => t + (Number(r[key]) || 0), 0);
 
 /** Situação exibida da parcela (derivada; nada é gravado): parcial > paga > cancelada > atrasada > pendente. */
@@ -46,7 +59,7 @@ function toRow(item, today) {
     id: item.id,
     referenceMonth: item.referenceMonth ?? null,
     dueDate: typeof item.dueDate === 'string' ? item.dueDate : null,
-    dueText: typeof item.dueDate === 'string' ? formatDateBR(item.dueDate) : '—',
+    dueText: isoDateText(item.dueDate),
     description: String(item.description ?? 'Sem descrição'),
     detail: detailParts.join(' · '),
     installment: number && total ? `${number}/${total}` : number ? String(number) : '—',
@@ -135,7 +148,7 @@ export function buildDebtorReport({ debtor, obligations, mode, month, today } = 
     mode, title, periodLabel,
     filename: debtorReportFilename(debtor.name, mode, month, today),
     debtor: { name: String(debtor.name ?? 'Devedor'), statusLabel: DEBTOR_STATUS_LABELS[debtor.status] ?? '—' },
-    issuedText: formatDateBR(today),
+    issuedText: isoDateText(today),
     summary, groups, totals, notes, empty: rows.length === 0,
   };
 }

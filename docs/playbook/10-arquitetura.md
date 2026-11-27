@@ -68,6 +68,7 @@ Os services de leitura têm tetos (`READ_LIMIT` = 1000 por coleção em `js/serv
 
 ## Armadilhas conhecidas
 
+- **Datas só-dia e fuso do navegador:** nunca formate `"AAAA-MM-DD"` ou `"AAAA-MM"` com `new Date(...)`/`Intl`. O texto vira meia-noite **UTC** e, no Brasil (UTC−3), é exibido como o dia/mês **anterior** (`formatDateBR('2026-12-05')` → `04/12/2026`; `formatMonthBR('2026-12')` → "novembro"). Os testes rodam em UTC e **não pegam isso**. Formate por texto (`formatDate`/`formatMonth` de `js/components/form-kit.js`, `isoDateText`/`monthLabel` de `js/core/debtorReport.js`) e teste com `TZ=America/Sao_Paulo`. `formatDateBR`/`formatMonthBR` (`js/utils/dates.js`) têm esse problema com strings ISO; hoje nenhum módulo as usa.
 - Importar algo do `server/` que carregue módulos só-ESM pode quebrar na Vercel (`ERR_REQUIRE_ESM`), mesmo funcionando local. Veja [Runbooks](doc:runbooks#atualizar-o-firebase-admin).
 - `exists()` nas Rules **não enxerga** documentos do mesmo lote: parcelas de cartão e faturas novas vão em dois lotes (`js/services/creditCards.js`).
 - `cleanUrls: true`: destino de `rewrite` nunca termina em `.html`.

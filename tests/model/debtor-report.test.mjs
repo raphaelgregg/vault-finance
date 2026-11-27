@@ -4,8 +4,9 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { debtorObligations, receivedByInstallment } from '../../js/core/model/debtors.js';
-import { buildDebtorReport, renderDebtorReportPdf, reportState, debtorReportFilename, REPORT_MODES } from '../../js/core/debtorReport.js';
+import { buildDebtorReport, renderDebtorReportPdf, reportState, debtorReportFilename, monthLabel, isoDateText, REPORT_MODES } from '../../js/core/debtorReport.js';
 import { inspectPdf, drawnText } from '../services/helpers/pdf-inspect.mjs';
 
 const TODAY = '2026-11-27';
@@ -140,5 +141,35 @@ describe('PDF gerado', () => {
     const bytes = renderDebtorReportPdf(buildDebtorReport({ ...huge, mode: 'month', month: '2026-11', today: TODAY }));
     const { streams } = inspectPdf(bytes);
     assert.ok(drawnText(streams[0]).some((t) => t.includes('999.999.999,99')));
+  });
+});
+
+describe('meses e datas por texto — independem do fuso do navegador (regressão: mês/dia saíam 1 a menos no Brasil)', () => {
+  it('monthLabel e isoDateText', () => {
+    const names = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+    names.forEach((n, i) => assert.equal(monthLabel(`2026-${String(i + 1).padStart(2, '0')}`), `${n} de 2026`));
+    for (const bad of [null, '', '2026-13', '2026-00', '26-12', '2026-12-01', 'x']) assert.equal(monthLabel(bad), 'Sem mês definido', String(bad));
+    assert.equal(isoDateText('2026-12-05'), '05/12/2026');
+    assert.equal(isoDateText('2026-01-31'), '31/01/2026');
+    for (const bad of [null, '', '2026-12', '05/12/2026']) assert.equal(isoDateText(bad), '—', String(bad));
+  });
+
+  it('o MESMO relatório em fusos de UTC−11 a UTC+14: título, grupo, vencimento e emissão corretos', () => {
+    const url = new URL('../../js/core/debtorReport.js', import.meta.url).href;
+    const modelUrl = new URL('../../js/core/model/debtors.js', import.meta.url).href;
+    const code = `
+      const { buildDebtorReport } = await import(${JSON.stringify(url)});
+      const { debtorObligations } = await import(${JSON.stringify(modelUrl)});
+      const debtor = { id: 'd', name: 'Roberta', status: 'open', lentCents: 100000, receivedCents: 0 };
+      const debts = [{ id: 'a', description: 'Empréstimo', installmentNumber: 5, installmentsTotal: 10, principalCents: 23000, dueDate: '2026-12-10', status: 'pending', debtGroupId: 'g' }];
+      const obligations = debtorObligations({ debtor, debts });
+      const month = buildDebtorReport({ debtor, obligations, mode: 'month', month: '2026-12', today: '2026-11-26' });
+      const open = buildDebtorReport({ debtor, obligations, mode: 'open', today: '2026-11-26' });
+      console.info(JSON.stringify({ title: month.title, period: month.periodLabel, label: month.summary[1].label, due: month.groups[0].rows[0].dueText, issued: month.issuedText, group: open.groups[0].label, file: month.filename }));`;
+    const expected = { title: 'Dívidas do mês — Dezembro de 2026', period: 'Parcelas com vencimento em Dezembro de 2026 (compras no cartão: mês da fatura).', label: 'A receber em Dezembro de 2026', due: '10/12/2026', issued: '26/11/2026', group: 'Dezembro de 2026', file: 'dividas-roberta-2026-12.pdf' };
+    for (const TZ of ['UTC', 'America/Sao_Paulo', 'America/Noronha', 'Pacific/Pago_Pago', 'Pacific/Kiritimati', 'Asia/Kolkata']) {
+      const out = execFileSync(process.execPath, ['--input-type=module', '-e', code], { env: { ...process.env, TZ }, encoding: 'utf8' });
+      assert.deepEqual(JSON.parse(out), expected, `TZ=${TZ}`);
+    }
   });
 });
