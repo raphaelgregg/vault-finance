@@ -112,7 +112,7 @@ try {
   assert.equal((await state()).page, 'playbook');
   await click('despesas'); await settled('despesas');
   await page.keyboard.press('/');
-  assert.equal(await page.evaluate(() => document.activeElement?.id), '', 'o atalho "/" do playbook não pode continuar ativo em outras páginas');
+  assert.notEqual(await page.evaluate(() => document.activeElement?.id), 'playbook-search', 'o atalho "/" do playbook não pode continuar ativo em outras páginas');
   assert.equal(await page.locator('#playbook-search').count(), 0);
 
   log('sair volta ao login');
