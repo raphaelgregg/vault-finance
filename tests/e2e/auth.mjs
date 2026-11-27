@@ -57,9 +57,13 @@ try {
   assert.equal(await page.inputValue('#pw-new'), '');
 
   log('login: a senha antiga deixa de funcionar e a nova entra');
+  // Sair: o observador de sessão do app (VF-PERF-02) leva ao login — o teste acompanha a navegação e testa os logins na tela de login.
+  await Promise.all([
+    page.waitForURL(/\/(index\.html)?(\?.*)?$/, { timeout: 20000 }),
+    page.evaluate(async () => { const { signOut } = await import('/js/services/auth.js'); await signOut(); }).catch(() => { /* contexto destruído pela navegação */ }),
+  ]);
   const tryLogin = (pwd) => page.evaluate(async ([mail, p]) => {
-    const { signIn, signOut } = await import('/js/services/auth.js');
-    await signOut();
+    const { signIn } = await import('/js/services/auth.js');
     try { await signIn(mail, p); return 'ok'; } catch (e) { return e.code; }
   }, [email, pwd]);
   assert.match(await tryLogin(password), /auth\/(invalid-credential|wrong-password)/);
