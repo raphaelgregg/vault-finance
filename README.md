@@ -27,7 +27,7 @@ em metas, recebimentos de devedores, estornos) são processadas por uma **funç�
 | Guarda de sessão, layout responsivo, tema claro/escuro persistido na conta | ✅ |
 | Contas, categorias, receitas, despesas, transferências | ✅ CRUD + auditoria + exclusão segura (vínculos) |
 | Assinaturas (pausar/retomar/cancelar, avanço de cobrança) | ✅ service + UI (o avanço de cobrança ainda não tem botão na UI) |
-| Devedores, parcelas e recebimentos | ✅ recebimento atômico (lote): recebimento + parcela + devedor + auditoria |
+| Devedores, parcelas e recebimentos | ✅ recebimento atômico (lote): recebimento + parcela + devedor + auditoria; **exportação em PDF** das dívidas do mês ou do total em aberto (VF-FEAT-01) |
 | Metas e movimentações (aporte/resgate) | ✅ valor guardado derivado; conclusão/reativação atômicas |
 | Cartões, compras parceladas e faturas | ✅ limite derivado; fechar/pagar fatura (ver limitações) |
 | Orçamentos por categoria/mês | ✅ gasto derivado das despesas do mês |
@@ -155,7 +155,7 @@ O workflow `.github/workflows/ci.yml` roda lint, unit e Rules (Node 24 e 26, LTS
 │   ├── services/               # firestore.js (CRUD, lote atômico, auditoria) + um service por módulo
 │   ├── components/             # dom.js (el/$/toast), sidebar, topbar, tema, modal, form-kit (formulários/dataTable), table-tools (ordenação e filtro de tabelas)
 │   ├── modules/                # um módulo por página (+ devedores-parcelas.js)
-│   └── utils/                  # constants, money (centavos: parse/format), dates, csv, zip, nav… (puros)
+│   └── utils/                  # constants, money (centavos: parse/format), dates, csv, zip, pdf, nav… (puros)
 ├── api/                        # funções Vercel (finance, validation, admin-claims): só adaptam req/res
 ├── server/                     # lógica de servidor (Admin SDK): finance/, validation/, admin/
 ├── tests/                      # model/, services/ (unit), rules/, integration/ (emulador), e2e/ (Playwright)
@@ -313,9 +313,10 @@ O projeto não habilita nada fora do Spark e não faz chamadas pagas.
    atual está documentado por teste em `tests/rules/`. Se adotada no futuro, o service volta a um lote.
 5. **Datas** em campos `date`/`*Date` são Timestamp em **meio-dia UTC** (o dia de calendário não
    desloca em nenhum fuso); filtros por data em `where` convertem a string ISO do mesmo modo.
-6. **Sem dependências novas sem aprovação** (nem libs via CDN): gráficos são barras CSS, CSV é gerado
-   no cliente, lint é um script próprio, E2E reaproveita o Playwright do ambiente.
-7. **Sem botão sem implementação** — busca global e exportação PDF ainda não existem e avisam isso.
+6. **Sem dependências novas sem aprovação** (nem libs via CDN): gráficos são barras CSS, CSV, ZIP e **PDF**
+   são gerados no cliente por código próprio (`js/utils/csv.js`, `zip.js`, `pdf.js`), lint é um script próprio,
+   E2E reaproveita o Playwright do ambiente.
+7. **Sem botão sem implementação** — a busca global ainda não existe e avisa isso. A exportação em PDF existe só para as dívidas de um devedor.
 
 ---
 
@@ -346,7 +347,7 @@ Guia para quem mantém o sistema, em `docs/playbook/` (Markdown): arquitetura, o
   despesas (compras no cartão não entram).
 - Backup do Firestore **não é automático no plano gratuito**; exportação completa por usuário ainda
   não existe. Não presuma backup gerenciado.
-- Exportação PDF não existe. Importação/exportação CSV de dados existe em `/manutencao-dados` (qualquer usuário
+- Exportação PDF existe **só** para as dívidas de um devedor (*Devedores → parcelas*: do mês ou total em aberto); relatórios gerais exportam apenas CSV. Importação/exportação CSV de dados existe em `/manutencao-dados` (qualquer usuário
   autenticado, SEMPRE só o próprio `uid`, mesmo sendo administrador): por entidade (11) ou **CSV unificado** com a
   coluna `entidade` (modelo, base populada e importação em 1 arquivo). A importação processa na ordem de dependência
   (contas → categorias → cartões → devedores → demais), é **idempotente** (chave determinística por entidade; reimportar

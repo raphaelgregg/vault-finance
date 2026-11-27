@@ -29,7 +29,7 @@ O **Vault Finance** é um controle financeiro pessoal: HTML5 + CSS3 + JavaScript
 | mexer em receitas, despesas ou transferências | [Receitas](doc:receitas), [Despesas](doc:despesas), [Transferências](doc:transferencias) |
 | mexer em contas e saldos | [Bancos e contas](doc:bancos), [Núcleo financeiro](doc:nucleo-financeiro) |
 | cartões e faturas | [Cartões](doc:cartoes) |
-| devedores e parcelas | [Devedores](doc:devedores) |
+| devedores, parcelas e **PDF das dívidas** (mês ou total em aberto) | [Devedores](doc:devedores#exportar-pdf-das-dividas-vf-feat-01) |
 | login, senha, e-mail verificado | [Autenticação](doc:autenticacao), [Configurações](doc:configuracoes) |
 | administradores, Central de validação, limpeza de dados | [Administração](doc:administracao), [Manutenção de dados](doc:manutencao-dados) |
 | adicionar uma página, coleção ou operação nova | [Runbooks](doc:runbooks#adicionar-uma-pagina-nova) |
