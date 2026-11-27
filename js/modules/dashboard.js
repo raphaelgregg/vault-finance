@@ -127,7 +127,9 @@ function draw(container, data, rerender) {
     el('dl', { class: 'hero__stats' }, [
       stat(`Resultado — ${period.label}`, money(result?.resultCents), result ? `Recebido ${formatCents(result.incomeCents)} − pago ${formatCents(result.expenseCents)}${data.overview ? ` · previsto do período ${formatCents(data.overview.forecastResultCents)}` : ''}` : unavailable, tone(result?.resultCents)),
       stat('Faturas a pagar', data.cardsView ? formatCents(data.cardsView.dueCents) : '—', data.cardsView ? 'Vencidas e a próxima fatura de cada cartão (parcelas futuras não entram)' : unavailable, data.cardsView?.dueCents > 0 ? ' stat__value--expense' : ''),
-      stat('A receber de devedores', money(debtors?.pendingCents), debtors ? `${debtors.openCount} devedor(es) em aberto` : unavailable, debtors?.pendingCents > 0 ? ' stat__value--income' : ''),
+      period.mode === 'month'
+        ? stat(`A receber de devedores — ${period.label}`, money(debtors?.monthDueCents), debtors ? `Total em aberto: ${formatCents(debtors.pendingCents)} (${debtors.openCount} devedor(es))` : unavailable, debtors?.monthDueCents > 0 ? ' stat__value--income' : '')
+        : stat('A receber de devedores (total em aberto)', money(debtors?.pendingCents), debtors ? `${debtors.openCount} devedor(es) em aberto` : unavailable, debtors?.pendingCents > 0 ? ' stat__value--income' : ''),
       stat('Posição líquida', money(data.netPositionCents), data.netPositionCents === null ? unavailable : 'Saldo + a receber − faturas a pagar (vencidas e próximas)', tone(data.netPositionCents)),
     ]),
   ]);
