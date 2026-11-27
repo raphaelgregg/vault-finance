@@ -1,6 +1,6 @@
 # PLAN.md — Estado operacional do Vault Finance
 
-Última atualização: 2026-11-23 (branch `claude`; reestruturação VF-3-05). Auditoria original de 2026-11-18; execução registrada nas tarefas abaixo.
+Última atualização: 2026-11-27 (branch `claude-dev`; reconciliação das pendências — ver seção abaixo; as branches `claude`/`bigboss` foram removidas em 2026-11-26). Auditoria original de 2026-11-18; execução registrada nas tarefas abaixo.
 Legenda de confiança: **[C]** comprovado por leitura do código · **[R]** risco potencial · **[M]** melhoria · **[NV]** não verificado.
 Convenção de IDs: `VF-<fase>-<nn>`. Preservar IDs; não remover tarefas concluídas.
 
@@ -11,6 +11,43 @@ Convenção de IDs: `VF-<fase>-<nn>`. Preservar IDs; não remover tarefas conclu
 - Maturidade: etapa 2 entregue — todos os módulos (contas, receitas, despesas, transferências, categorias, assinaturas, devedores+parcelas/recebimentos, metas, cartões/faturas, orçamentos, dashboard, relatórios) têm service e UI; pendem importação/backup, publicação e verificações em produção (ver Itens não verificados).
 - Testes (executados em 2026-11-19, Node 22): `test:unit` 469 ok · `test:rules` 82 ok (emulador) · `npm run lint` OK · `npm run test:e2e` OK (Chromium, emuladores; inclui devedores/cartão). Node 18.20.8: lint OK · `test:unit` 426 ok. CI no GitHub: runs #1/#2 falharam só no job Node 18 (corrigido; ver Histórico). Rules/índices em produção e Vercel: **não verificados** (deploy bloqueado, ver Itens não verificados).
 - Lint próprio (`scripts/lint.mjs`), CI (`.github/workflows/ci.yml`, não executado no GitHub), sem build.
+
+## Pendências em aberto (reconciliado em 2026-11-27)
+
+Fonte: leitura do PLAN.md + conferência pontual no código (busca global, `.firebaserc`, CI, mensagens de auth). **Esta seção prevalece** sobre trechos antigos de Gap Analysis, "Itens não verificados" e "Histórico" (mantidos como registro; vários estão defasados — ver "Defasados" abaixo). IDs preservados.
+
+### A. Abertas — funcionalidade
+- **Busca global** — `js/components/topbar.js:21` ainda mostra "Pesquisar (em breve)". Sem tarefa/ID: criar quando priorizada.
+- **VF-2-03k — baixa por parcela de cartão de devedor** — citada como follow-up em VF-2-03j/m/n, nunca definida como tarefa própria; `debtPayments` exige `debtId` (parcela de empréstimo). Ver linhas 136, 150, 157.
+- **VF-2-03s — cobrança direta de assinatura (sem cartão) gerar despesa paga**, com aviso de duplicidade (linha 181). Nunca implementada como tarefa própria.
+- **Estorno de recebimento de devedor / movimentações de metas** — registrado como limitação (linha 157); conferir se os estornos posteriores (VF-ARQ-02/`reversals`) cobrem antes de abrir tarefa.
+- **Backup por usuário** — exportação completa em `.zip` existe (`exportAllCsv`); backup/restauração por usuário não.
+
+### B. Abertas — qualidade e arquitetura (Baixo)
+- **Débito:** `js/services/{accounts,incomes,expenses,transfers,categories}.js` — update sem checagem de existência/concorrência; auditoria grava `after` completo (dados duplicados) [M].
+- **Débito:** `js/services/accounts.js` `getStatusOptions` duplica enum do modelo [M].
+- **Débito:** `receitas.js`, `despesas.js`, `transferencias.js` (550–700 linhas) concentram render/estado/handlers; filtros client-side sobre a página carregada [M]. `transferencias.js` 697, `despesas.js` 645, `receitas.js` 621, `ops.mjs` 715 (linha 449).
+- **Débito:** duplicação `assinaturas.js` × `devedores.js` (statCard/iconButton/showErrors) — VF-3-05 deixou registrada (linha 449).
+- **Testes:** E2E só em Chromium e fora do CI (`ci.yml` declara que não roda E2E); `categorias.js`, `assinaturas.js`, `model.js` sem E2E pela UI; sem E2E que valide o **valor** da Posição líquida (VF-UX-09); medição de leituras reais do Firestore não feita.
+- **Acessibilidade/responsividade:** CSS/HTML não auditados em detalhe (há `tests/e2e/responsive.mjs`, mas sem auditoria de acessibilidade).
+- **VF-SEC-06 (opcional):** MFA TOTP só se o console liberar sem faturamento. **VF-SEC-03:** App Check dormente por decisão (reavaliar se o app abrir ao público); risco residual aceito.
+
+### C. Não verificadas (exigem ação do dono/ambiente real)
+- **Rules e índices em produção:** `firestore.rules`/`firestore.indexes.json` — o PLAN registra várias alterações "aguardando republicação" (2026-11-19 a 2026-11-25: `openingDate`, `debtPayments.purchaseId`, `chargeDay`, `auditLog` VF-SEC-07, etc.). O teste de produção de 2026-11-26 (login, receita, despesa, transferência) passou, mas **não há registro explícito** de que a republicação completa foi feita nem verificada. Confirmar com `npx firebase deploy --only firestore:rules,firestore:indexes` (somente com autorização) e comparar com as publicadas.
+- **Vercel:** CSP/SRI sem violação no console, `.vercelignore` efetivo (VF-SEC-04), rota `/categorias` e demais rewrites, variáveis de ambiente reais (VF-SEC-02: nenhuma variável de emulador).
+- **Admin real:** `FIREBASE_SERVICE_ACCOUNT` na Vercel e fluxo de claims contra o Google real (funcionou no preview em 2026-11-26/27 segundo o histórico; conferir em produção). `REQUIRE_VERIFIED_EMAIL=true`: passo do usuário após verificar o e-mail do admin.
+- **CI no GitHub:** confirmar o run mais recente (Node 22 e 24) na `claude-dev`/`main`.
+- **Seletor de devedores no Firestore real** (índice composto): causa deduzida, não reproduzida.
+- **Merge:** `claude-dev` está à frente de `main`/`development` (VF-PERF-01/02, VF-UX-01/09, VF-DOC-02, correção do botão de menu); promoção depende do preview e de autorização.
+- **VF-UX-09 / botão "Recolher menu":** validar no preview (desktop e celular); a correção do menu foi feita por leitura de código, sem reprodução.
+
+### D. Defasados (não são pendências)
+- Gap Analysis "Ausentes: App Check" → decisão de não ativar (2026-11-26). "Exportação completa" → existe (`exportAllCsv`).
+- Gap Analysis "Fluxos incompletos" (pagamento de fatura sem conta, botão de cobrança de assinatura, estorno) → VF-2-03p/r/ARQ-02 resolveram em grande parte; manter só o que está em A.
+- Gap Analysis "Segurança: 9 achados abertos (VF-SEC-01…09)" → todos concluídos no escopo decidido (ver B/C).
+- "Testes: unit 340 / Rules 65" → atual: unit 792, lint OK, E2E completo em `npm run test:e2e` (2026-11-27).
+- `[~] VF-ARQ-02` e `[~] VF-UI-02` ("NÃO publicadas") → o servidor financeiro roda em produção desde 2026-11-26; falta só confirmar o item C de Rules.
+- `.firebaserc` já existe (débito "sem `.firebaserc`" resolvido).
 
 ## Gap Analysis
 
@@ -607,4 +644,5 @@ Convenção de IDs: `VF-<fase>-<nn>`. Preservar IDs; não remover tarefas conclu
 - 2026-11-27 — VF-PERF-01/02 **validação completa:** unit 782, lint, e a suíte E2E inteira (flows, movements, debtors, maintenance, inventário, Central de validação, auth, csv, estornos, todas as telas, tabelas, responsividade, confirmações, compra no cartão, datas, playbook e o novo `navigation.mjs`; agora em `npm run test:e2e`). Ajuste necessário: `tests/e2e/auth.mjs` sai da conta pelo serviço dentro da página e passou a acompanhar o redirecionamento ao login (observador de sessão novo). **Pendente (usuário):** validar no preview da `claude-dev` (sensação de fluidez, voltar/avançar, F5) e autorizar o merge para `main`/`development`.
 - 2026-11-27 — **VF-UX-01 — resumo do mês em Receitas/Despesas e resultado claro no Dashboard** (funcionalidade/correção) — implementada na `claude-dev`. **Problemas (comprovados no código):** (1) Receitas/Despesas só tinham totais do **mês atual**, calculados sobre a **página carregada** (100 itens) — sem resumo do mês escolhido no filtro e incompleto com paginação; (2) o Dashboard mostrava como "Resultado" apenas o **realizado** (por data de recebimento/pagamento), então um mês com lançamentos pendentes (ex.: 12/2026) exibia 0,00 e divergia das listas (que filtram por `expectedDate`/`dueDate`). **Solução:** `summarizeMovements` e `periodOverview` (`js/core/aggregates.js`, puros); `listIncomesOfMonth`/`listExpensesOfMonth` (leitura do mês inteiro por intervalo, sem índice novo, teto 1000 com aviso); componente `js/components/month-summary.js` (painel Previsto/Liquidado/Pendente + atraso; seletor de mês com mês atual e próximos 6); Dashboard: painel `#dashboard-overview` (Realizado × Pendente × Total do período, entradas/saídas/resultado) e legenda do card "Resultado" explicitando recebido − pago e o previsto. **Validação:** `tests/model/month-summary.test.mjs` (novo), lint e unit. **Não verificado:** E2E dos novos painéis e uso em produção. **Fora de escopo/risco:** pagamentos de fatura e recebimentos de devedores continuam fora do resultado (aparecem em suas áreas); meses com > 1000 lançamentos truncam (aviso exibido).
 - 2026-11-27 — **VF-UX-01 (complemento)** — o card "A receber de devedores" do Dashboard ignorava o período e mostrava o total em aberto; no modo **mês** agora mostra o valor a receber do mês selecionado (`debtors.monthDueCents`) com o total em aberto na legenda. Posição líquida inalterada (usa o total).
+- 2026-11-27 — **VF-UX-09 — Posição líquida (curto prazo)** (correção) — implementada na `claude-dev`. **Problema (comprovado):** a posição líquida somava saldo + TOTAL em aberto dos devedores (sem prazo) − faturas; com 7 devedores (R$ 12.926,01) contra saldo de R$ 400,90 o valor (R$ 5.853,37) destoava dos demais cards. **Solução:** `netPositionCents` = saldo + a receber de devedores **no mês** (`debtorMonth`) − faturas a pagar; novo `netPositionWithAllDebtorsCents` (fórmula antiga) aparece só na legenda. Arquivos: `js/services/dashboard.js`, `js/modules/dashboard.js`, `docs/manual/manual-usuario.md`, `docs/playbook/funcionalidades/14-dashboard.md`. Conclusão: lint + unit + `docs:check` verdes.
 - 2026-11-27 — **VF-DOC-02 — manual do usuário (PDF) baixável** (documentação) — implementado na `claude-dev`. Fonte em Markdown `docs/manual/manual-usuario.md` (primeiros passos, cada área, como as operações se comunicam — mapa cadastros→movimentos→resultados, dois caminhos de escrita, garantias —, receitas de uso, dúvidas, glossário); gerador `scripts/gen-manual.mjs` (`npm run manual:build`; usa `pandoc` e Chromium do Playwright só na máquina de quem edita, sem dependência nova no projeto); PDF versionado em `assets/manual/manual-vault-finance.pdf` (13 páginas) e link *Baixar manual do usuário (PDF)* em Configurações. `docs/` não é público na Vercel (rewrite), por isso o PDF fica em `assets/`. **Validação:** `tests/services/manual.test.mjs`, lint, unit e E2E de Configurações. **Não verificado:** download no celular em produção. **Risco:** PDF é artefato versionado: precisa ser regenerado ao mudar o Markdown (runbook).

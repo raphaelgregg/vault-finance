@@ -57,7 +57,7 @@ Siga esta ordem; cada passo prepara o próximo:
 Só leitura. Mostra, para o **período** que você escolher (mês, semestre, ano ou tudo):
 
 - **Saldo total** das contas hoje.
-- **Resultado do período** (recebido − pago), as **faturas a pagar**, o **a receber de devedores** e a **posição líquida** (saldo + a receber − faturas).
+- **Resultado do período** (recebido − pago), as **faturas a pagar**, o **a receber de devedores** e a **posição líquida (curto prazo)** (saldo + a receber no mês − faturas; a legenda mostra também o valor com todo o total em aberto dos devedores).
 - **Entradas e saídas do período**, em três linhas:
 
 | Linha | Significado |
@@ -276,6 +276,6 @@ Na tela inicial, aba *Esqueci a senha*; você recebe um e-mail para redefinir.
 | **Saldo de abertura** | Saldo da conta na data em que você começou a usar o sistema. |
 | **Estorno** | Lançamento que desfaz outro, com motivo. |
 | **Fatura** | Soma das compras do cartão num ciclo; é paga de uma vez. |
-| **Posição líquida** | Saldo + a receber − faturas a pagar. |
+| **Posição líquida** | Saldo + a receber de devedores no mês − faturas a pagar (curto prazo). O total em aberto dos devedores aparece à parte, na legenda. |
 | **Auditoria** | Registro de quem fez o quê e quando. |
 | **Derivado / calculado** | Valor que o sistema calcula, nunca digitado. |

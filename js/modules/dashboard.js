@@ -114,6 +114,8 @@ function draw(container, data, rerender) {
     el('dd', { class: `stat__value${toneClass}`, text: value }),
     hint ? el('dd', { class: 'stat__hint', text: hint }) : null,
   ]);
+  const netHint = `Saldo ${formatCents(data.totalBalanceCents)} + a receber no mês ${formatCents(debtors?.monthDueCents ?? 0)} − faturas a pagar ${formatCents(data.cardsView?.dueCents ?? 0)}`
+    + (data.netPositionWithAllDebtorsCents === null ? '' : ` · Com todo o total em aberto dos devedores: ${formatCents(data.netPositionWithAllDebtorsCents)}`);
   const summary = el('section', { class: 'hero', id: 'dashboard-summary', 'aria-label': 'Situação financeira' }, [
     el('article', { class: 'card hero__main' }, [
       el('div', { class: 'card__head' }, [el('span', { text: 'Saldo total' })]),
@@ -130,7 +132,7 @@ function draw(container, data, rerender) {
       period.mode === 'month'
         ? stat(`A receber de devedores — ${period.label}`, money(debtors?.monthDueCents), debtors ? `Total em aberto: ${formatCents(debtors.pendingCents)} (${debtors.openCount} devedor(es))` : unavailable, debtors?.monthDueCents > 0 ? ' stat__value--income' : '')
         : stat('A receber de devedores (total em aberto)', money(debtors?.pendingCents), debtors ? `${debtors.openCount} devedor(es) em aberto` : unavailable, debtors?.pendingCents > 0 ? ' stat__value--income' : ''),
-      stat('Posição líquida', money(data.netPositionCents), data.netPositionCents === null ? unavailable : 'Saldo + a receber − faturas a pagar (vencidas e próximas)', tone(data.netPositionCents)),
+      stat('Posição líquida (curto prazo)', money(data.netPositionCents), data.netPositionCents === null ? unavailable : netHint, tone(data.netPositionCents)),
     ]),
   ]);
 
