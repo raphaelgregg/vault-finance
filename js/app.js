@@ -1,7 +1,9 @@
 /**
  * Entrada das páginas internas.
  * Fluxo: tema -> emuladores -> guarda de sessão -> shell -> módulo da página.
- * Nenhum módulo é importado antes da autenticação.
+ * VF-PERF-01: o DOWNLOAD do módulo da página começa já, em paralelo à autenticação (só importa; `render` — que lê
+ * dados — continua só depois da sessão); o tema salvo na conta NÃO bloqueia o menu; marcas de tempo `vf:*` na
+ * linha do tempo do DevTools (Performance → Timings) permitem medir a abertura de cada página.
  */
 import { applyStoredTheme, applyThemePreference, setThemePersister } from './components/theme.js';
 import { getSettings, saveSettings } from './services/preferences.js';
@@ -36,7 +38,11 @@ const MODULES = {
   playbook: () => import('./modules/playbook.js'),
 };
 
+/** Marca de tempo (User Timing) — sem custo perceptível e sem rede; falha silenciosa em navegadores antigos. */
+const mark = (name) => { try { performance.mark(name); } catch { /* sem User Timing */ } };
+
 async function bootstrap() {
+  mark('vf:boot');
   applyStoredTheme();
   if (configMissing) {
     toast('Configuração do Firebase ausente. Veja o README (js/firebase/config.js).', 6000);
@@ -44,17 +50,19 @@ async function bootstrap() {
   connectEmulatorsOnce();
 
   const pageId = document.body.dataset.page || 'dashboard';
+  // Download do módulo (e das dependências) em paralelo à autenticação; o erro real é tratado adiante.
+  const modulePromise = MODULES[pageId]?.();
+  modulePromise?.catch(() => {});
   const user = await requireSession();
   if (!user) return;
+  mark('vf:session');
 
-  // Tema: o cache local já foi aplicado; aqui prevalece o valor salvo na conta (novo dispositivo).
+  // Tema: o cache local já foi aplicado; o valor salvo na conta (novo dispositivo) prevalece quando chegar — sem
+  // bloquear o menu (medido: −35% até o menu aparecer).
   setThemePersister((theme) => saveSettings(user.uid, { theme }));
-  try {
-    const settings = await getSettings(user.uid);
-    if (settings?.theme) applyThemePreference(settings.theme);
-  } catch (error) {
-    console.error('[app] falha ao carregar configurações', error);
-  }
+  getSettings(user.uid)
+    .then((settings) => { if (settings?.theme) applyThemePreference(settings.theme); })
+    .catch((error) => console.error('[app] falha ao carregar configurações', error));
 
   const navItem = navItemById(pageId);
   const sidebar = mountSidebar($('#sidebar'), { activeId: pageId });
@@ -70,18 +78,19 @@ async function bootstrap() {
   document.querySelector('.app').append(bottomNav);
   mountBottomNav(bottomNav, { activeId: pageId, onMore: () => sidebar.toggleMobile() });
 
-  const loadModule = MODULES[pageId];
-  if (!loadModule) {
+  mark('vf:shell');
+  if (!modulePromise) {
     $('#page-content').textContent = 'Página não encontrada.';
     return;
   }
 
   try {
-    const module = await loadModule();
+    const module = await modulePromise;
     startDateInputs(); // campos de data em DD/MM/AAAA (máscara, calendário e ISO no envio)
     startTableTools(); // ordenação e filtro em todas as tabelas (páginas e modais)
     await module.render($('#page-content'), { user });
     refreshIcons();
+    mark('vf:content');
     // "Lançar" na barra inferior abre a página já com o formulário de criação (#novo).
     if (location.hash === '#novo') {
       history.replaceState(null, '', location.pathname + location.search);
