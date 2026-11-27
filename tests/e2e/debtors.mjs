@@ -139,6 +139,28 @@ try {
   assert.match(after, /Geladeira[^\n]*Pendente/); // compras de cartão intactas
   assert.equal(await page.getByRole('button', { name: /Quitar dívida Moto/ }).count(), 0);
 
+  log('VF-FEAT-01: exportar PDF do total em aberto e do mês (download real no navegador)');
+  const { readFile } = await import('node:fs/promises');
+  const grabPdf = async (locator) => {
+    const [download] = await Promise.all([page.waitForEvent('download'), locator.click()]);
+    const bytes = await readFile(await download.path());
+    const text = bytes.toString('latin1');
+    const shown = [...text.matchAll(/<([0-9a-f]+)> Tj/g)].map((m) => Buffer.from(m[1], 'hex').toString('latin1'));
+    assert.ok(text.startsWith('%PDF-1.4') && text.endsWith('%%EOF\n'), 'arquivo é um PDF');
+    return { filename: download.suggestedFilename(), shown };
+  };
+  const openPdf = await grabPdf(page.locator('#export-pdf-open'));
+  assert.match(openPdf.filename, /^dividas-maria-em-aberto-\d{4}-\d{2}-\d{2}\.pdf$/);
+  assert.ok(openPdf.shown.includes('Total em aberto') && openPdf.shown.some((t) => /Geladeira/.test(t)), 'parcelas de cartão pendentes aparecem');
+  assert.ok(!openPdf.shown.some((t) => /Moto/.test(t)), 'dívida quitada fica fora do total em aberto');
+  const months = await page.locator('#statement-month option').evaluateAll((os) => os.map((o) => o.value).filter((v) => v !== 'all'));
+  assert.ok(months.length >= 1);
+  await page.selectOption('#statement-month', months[0]);
+  await page.waitForFunction((m) => document.querySelector('#statement-month')?.value === m, months[0]);
+  const monthPdf = await grabPdf(page.locator('#export-pdf-month'));
+  assert.match(monthPdf.filename, /^dividas-maria-\d{4}-\d{2}\.pdf$/);
+  assert.ok(monthPdf.shown.includes('Parcelas do mês') && monthPdf.shown.some((t) => /^Dívidas do mês/.test(t.replace('\xed', 'í'))), 'relatório do mês');
+
   log('VF-2-03ak: quitar parcela individual e todas as parcelas pendentes de um mês (cartão + dívida), com Firestore e indicadores');
   const renan = await page.evaluate(async () => {
     const { listCards, registerCardPurchase } = await import('/js/services/creditCards.js');

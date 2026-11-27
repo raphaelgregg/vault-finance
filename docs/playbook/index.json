@@ -989,6 +989,8 @@
     "js/services/debtors.js",
     "js/services/debtPayments.js",
     "js/core/model/debtors.js",
+    "js/core/debtorReport.js",
+    "js/utils/pdf.js",
     "server/finance/ops.mjs"
    ],
    "page": "devedores",
@@ -1017,6 +1019,12 @@
      "heading": "Tela",
      "level": 2,
      "md": "`devedores.js` lista e edita devedores (com **fechamento do mês**: por devedor, as compras, parcelas e recebimentos do mês via `loadDebtorStatements`, em lotes de 30 devedores). `devedores-parcelas.js` é o modal de parcelas e recebimentos: registrar recebimento (parcial), quitar mês, cancelar várias, estornar."
+    },
+    {
+     "id": "exportar-pdf-das-dividas-vf-feat-01",
+     "heading": "Exportar PDF das dívidas (VF-FEAT-01)",
+     "level": 2,
+     "md": "No modal de parcelas (`devedores-parcelas.js`) há dois botões na barra de ferramentas:\n\n| Botão | O que gera |\n|---|---|\n| **PDF — \\<mês\\>** | As parcelas do mês de referência escolhido no filtro (sem filtro, o mês de fechamento): pagas, parciais e pendentes, com o **a receber no mês**. Dívidas contam pelo mês do vencimento; compras no cartão, pelo mês da fatura. |\n| **PDF — total em aberto** | Tudo que ainda não foi recebido, de **todos os meses**, agrupado por mês com subtotal, mais emprestado, recebido e total em aberto do devedor. |\n\n- **Mesmos números da tela:** o relatório usa as obrigações de `debtorObligations` (as da tabela), sem nova leitura e sem gravar nada. Parcelas **canceladas** não entram. \"Atrasada\" é derivada (pendente com vencimento anterior à emissão).\n- **Modelo × desenho:** `buildDebtorReport` (`js/core/debtorReport.js`, puro) monta os dados e os textos formatados; `renderDebtorReportPdf` desenha o PDF (A4 retrato, várias páginas, cabeçalho da tabela repetido, rodapé \"Página i de N\"). Arquivo: `dividas-<nome>-<AAAA-MM>.pdf` ou `dividas-<nome>-em-aberto-<data>.pdf`.\n- **Sem dependências:** `js/utils/pdf.js` é um gerador de PDF mínimo (como `js/utils/zip.js`): fontes padrão Helvetica e Helvetica-Bold, codificação WinAnsi (português completo, símbolos comuns; outros caracteres viram `?`), larguras das fontes embutidas no código. Todo o arquivo é ASCII, então os deslocamentos da tabela `xref` são exatos. O download usa um `Blob` e um link temporário, como nos CSV.\n- **Desabilitado** quando os estornos não puderam ser lidos (modo limitado): os valores recebidos não seriam confiáveis.\n- **Testes:** `tests/services/pdf.test.mjs` confere a **estrutura** do arquivo (cada `xref` aponta para o objeto certo, `/Length` confere); `tests/model/debtor-report.test.mjs` cobre mês, total em aberto, cartão, limite, vazio e paginação.\n- Para **validar um PDF de verdade**, use `pdfinfo`, `pdftotext` e `pdftoppm -png` (poppler) ou o `pypdf` em modo estrito; nenhum deles é dependência do projeto."
     },
     {
      "id": "armadilhas",
@@ -1568,7 +1576,7 @@
      "id": "testes",
      "heading": "Testes",
      "level": 2,
-     "md": "| Pasta | Arquivos |\n| --- | --- |\n| `tests/model/` | 5 |\n| `tests/services/` | 37 |\n| `tests/rules/` | 1 |\n| `tests/integration/` | 12 |\n| `tests/e2e/` | 18 |"
+     "md": "| Pasta | Arquivos |\n| --- | --- |\n| `tests/model/` | 6 |\n| `tests/services/` | 38 |\n| `tests/rules/` | 1 |\n| `tests/integration/` | 12 |\n| `tests/e2e/` | 18 |"
     },
     {
      "id": "workflows-do-github",

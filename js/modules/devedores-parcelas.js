@@ -15,6 +15,7 @@ import {
   previewMonthSettlement, newOperationId, formatCents,
 } from '../services/debtPayments.js';
 import { debtorPendingCents, debtorObligations, receivedByInstallment, accountLabel } from '../core/model.js';
+import { buildDebtorReport, renderDebtorReportPdf, REPORT_MODES } from '../core/debtorReport.js';
 import { getDebtor, getDebtorStatement } from '../services/debtors.js';
 import { listCards } from '../services/creditCards.js';
 import { listAccounts } from '../services/accounts.js';
@@ -22,6 +23,16 @@ import { describeError } from '../utils/errors.js';
 import { openReversalModal } from '../components/reversal-modal.js';
 
 const STATUS_LABELS = { pending: 'Pendente', partial: 'Parcial', paid: 'Paga', late: 'Atrasada', cancelled: 'Cancelada' };
+
+/** Baixa o arquivo no navegador (mesmo padrão das exportações CSV: link temporário para um Blob). */
+function downloadPdf(filename, bytes) {
+  const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+  const link = el('a', { href: url, download: filename });
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
 
 /** Status exibido: pendente vencida aparece como atrasada (sem gravar). */
 export function displayDebtStatus(debt, today = todayIso()) {
@@ -363,6 +374,22 @@ async function openDebtorInstallmentsInner({ user, debtor, onChange, month = 'al
     el('p', { class: 'card__hint', text: `Emprestado ${formatCents(debtor.lentCents)} − recebido ${formatCents(debtor.receivedCents ?? 0)}. Detalhado: ${formatCents(obligations.listedCents)}${obligations.unlistedCents > 0 ? ` · sem parcelas cadastradas ${formatCents(obligations.unlistedCents)}` : ''}.` }),
   ]);
 
+  // Exportação em PDF (VF-FEAT-01): usa as MESMAS obrigações da tabela. Mês = o filtro escolhido (ou o mês de fechamento).
+  const reportMonth = listAll ? closingMonth : month;
+  const exportPdf = (mode) => {
+    try {
+      const report = buildDebtorReport({ debtor, obligations, mode, month: reportMonth, today: todayIso() });
+      downloadPdf(report.filename, renderDebtorReportPdf(report));
+      toast(`PDF gerado: ${report.filename}`);
+    } catch (error) {
+      console.error('[devedores] falha ao gerar o PDF', error);
+      toast(`Não foi possível gerar o PDF: ${describeError(error)}`, 7000);
+    }
+  };
+  const pdfHint = limited ? 'Indisponível: os estornos não puderam ser lidos, então os valores recebidos não são confiáveis.' : '';
+  const exportMonthButton = el('button', { type: 'button', class: 'btn btn--secondary', id: 'export-pdf-month', disabled: limited, title: pdfHint || `Baixar o PDF das dívidas de ${formatMonth(reportMonth)}`, onClick: () => exportPdf(REPORT_MODES.MONTH), text: `PDF — ${formatMonth(reportMonth)}` });
+  const exportOpenButton = el('button', { type: 'button', class: 'btn btn--secondary', id: 'export-pdf-open', disabled: limited, title: pdfHint || 'Baixar o PDF com tudo que está em aberto, de todos os meses', onClick: () => exportPdf(REPORT_MODES.OPEN), text: 'PDF — total em aberto' });
+
   const addButton = canAddDebt ? el('button', { type: 'button', class: 'btn btn--primary', onClick: openCreate, text: 'Nova dívida' }) : null;
   const settleAllButton = !limited && isOpen && debts.some((d) => ['pending', 'late'].includes(d.status))
     ? el('button', { type: 'button', class: 'btn btn--secondary', onClick: () => openSettle(null, `todas as dívidas de ${debtor.name}`), text: 'Quitar todas as dívidas' }) : null;
@@ -379,7 +406,7 @@ async function openDebtorInstallmentsInner({ user, debtor, onChange, month = 'al
       // Barra única: filtro de mês + ações da dívida; a barra de seleção (cancelamento múltiplo) vem logo abaixo.
       el('div', { class: 'toolbar' }, [
         el('div', { class: 'form__field' }, [el('label', { for: 'statement-month', text: 'Mês de referência' }), monthSelect]),
-        addButton, settleAllButton,
+        addButton, settleAllButton, exportMonthButton, exportOpenButton,
         limited || listAll ? el('span', { class: 'toolbar__info', text: limited ? 'Parcelas do mês indisponíveis: os estornos não puderam ser lidos.' : 'Escolha um mês de referência para quitar todas as parcelas pendentes dele de uma vez.' }) : null,
       ]),
       selectionBar,

@@ -3,7 +3,7 @@ title: Devedores, dívidas e recebimentos
 category: Funcionalidades
 tags: devedores, dívidas, parcelas, recebimento, quitação, lote, estorno
 summary: Quem deve ao usuário — dívidas à vista e parceladas, recebimentos parciais, quitação em lote, cancelamento, reagendamento e extrato do mês.
-files: js/modules/devedores.js, js/modules/devedores-parcelas.js, js/services/debtors.js, js/services/debtPayments.js, js/core/model/debtors.js, server/finance/ops.mjs
+files: js/modules/devedores.js, js/modules/devedores-parcelas.js, js/services/debtors.js, js/services/debtPayments.js, js/core/model/debtors.js, js/core/debtorReport.js, js/utils/pdf.js, server/finance/ops.mjs
 page: devedores
 ---
 
@@ -41,6 +41,22 @@ Idempotência por `operationId` em todas; o lote usa uma chave por item.
 ## Tela
 
 `devedores.js` lista e edita devedores (com **fechamento do mês**: por devedor, as compras, parcelas e recebimentos do mês via `loadDebtorStatements`, em lotes de 30 devedores). `devedores-parcelas.js` é o modal de parcelas e recebimentos: registrar recebimento (parcial), quitar mês, cancelar várias, estornar.
+
+## Exportar PDF das dívidas (VF-FEAT-01)
+
+No modal de parcelas (`devedores-parcelas.js`) há dois botões na barra de ferramentas:
+
+| Botão | O que gera |
+|---|---|
+| **PDF — \<mês\>** | As parcelas do mês de referência escolhido no filtro (sem filtro, o mês de fechamento): pagas, parciais e pendentes, com o **a receber no mês**. Dívidas contam pelo mês do vencimento; compras no cartão, pelo mês da fatura. |
+| **PDF — total em aberto** | Tudo que ainda não foi recebido, de **todos os meses**, agrupado por mês com subtotal, mais emprestado, recebido e total em aberto do devedor. |
+
+- **Mesmos números da tela:** o relatório usa as obrigações de `debtorObligations` (as da tabela), sem nova leitura e sem gravar nada. Parcelas **canceladas** não entram. "Atrasada" é derivada (pendente com vencimento anterior à emissão).
+- **Modelo × desenho:** `buildDebtorReport` (`js/core/debtorReport.js`, puro) monta os dados e os textos formatados; `renderDebtorReportPdf` desenha o PDF (A4 retrato, várias páginas, cabeçalho da tabela repetido, rodapé "Página i de N"). Arquivo: `dividas-<nome>-<AAAA-MM>.pdf` ou `dividas-<nome>-em-aberto-<data>.pdf`.
+- **Sem dependências:** `js/utils/pdf.js` é um gerador de PDF mínimo (como `js/utils/zip.js`): fontes padrão Helvetica e Helvetica-Bold, codificação WinAnsi (português completo, símbolos comuns; outros caracteres viram `?`), larguras das fontes embutidas no código. Todo o arquivo é ASCII, então os deslocamentos da tabela `xref` são exatos. O download usa um `Blob` e um link temporário, como nos CSV.
+- **Desabilitado** quando os estornos não puderam ser lidos (modo limitado): os valores recebidos não seriam confiáveis.
+- **Testes:** `tests/services/pdf.test.mjs` confere a **estrutura** do arquivo (cada `xref` aponta para o objeto certo, `/Length` confere); `tests/model/debtor-report.test.mjs` cobre mês, total em aberto, cartão, limite, vazio e paginação.
+- Para **validar um PDF de verdade**, use `pdfinfo`, `pdftotext` e `pdftoppm -png` (poppler) ou o `pypdf` em modo estrito; nenhum deles é dependência do projeto.
 
 ## Armadilhas
 

@@ -146,8 +146,8 @@ Motor exigido: `node >=24`.
 
 | Pasta | Arquivos |
 | --- | --- |
-| `tests/model/` | 5 |
-| `tests/services/` | 37 |
+| `tests/model/` | 6 |
+| `tests/services/` | 38 |
 | `tests/rules/` | 1 |
 | `tests/integration/` | 12 |
 | `tests/e2e/` | 18 |
