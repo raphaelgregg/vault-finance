@@ -146,11 +146,11 @@ Motor exigido: `node >=24`.
 
 | Pasta | Arquivos |
 | --- | --- |
-| `tests/model/` | 6 |
+| `tests/model/` | 7 |
 | `tests/services/` | 39 |
 | `tests/rules/` | 1 |
 | `tests/integration/` | 12 |
-| `tests/e2e/` | 19 |
+| `tests/e2e/` | 20 |
 
 ## Workflows do GitHub
 

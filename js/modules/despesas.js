@@ -9,11 +9,13 @@
 import { brDateInput } from '../components/date-input.js';
 import { el, $, toast, refreshIcons } from '../components/dom.js';
 import { openModal, closeModal } from '../components/modal.js';
-import { createStatCard } from '../components/stat-card.js';
+import { createMonthSummary, monthChoices } from '../components/month-summary.js';
 import { formatCentsInput, formatDate, clearErrors, showFormErrors as showErrors, confirmModal } from '../components/form-kit.js';
 import { filterMovements, accountLabel } from '../core/model.js';
+import { summarizeMovements } from '../core/aggregates.js';
 import {
   listExpenses,
+  listExpensesOfMonth,
   createExpense,
   updateExpense,
   deleteExpense,
@@ -41,6 +43,8 @@ let pager = null;
 let categoriesCache = [];
 let accountsCache = [];
 let currentFilter = { status: 'all', month: null, categoryId: null };
+let monthData = null; // { month, items, truncated } | { month, failed } do mês exibido no resumo (VF-UX-01)
+let monthSeq = 0;
 
 /** Render principal do módulo. */
 export async function render(container, { user }) {
@@ -59,12 +63,61 @@ async function loadData() {
       orderBy: ['dueDate', 'desc'], limit, startAfterId,
     }),
   });
-  [, categoriesCache, accountsCache] = await Promise.all([
+  [, , categoriesCache, accountsCache] = await Promise.all([
     pager.loadFirst(),
+    loadMonthData(),
     listCategories(currentUser.uid),
     listAccounts(currentUser.uid),
   ]);
   expensesCache = [...pager.items].reverse();
+}
+
+/** Mês do resumo: o filtro de mês, ou o mês atual quando não há filtro. */
+function summaryMonth() {
+  return currentFilter.month || currentMonthKey();
+}
+
+/** Lê TODOS os lançamentos do mês do resumo (não só a página carregada). Falha vira estado `failed`, nunca exceção. */
+async function loadMonthData() {
+  const month = summaryMonth();
+  const seq = ++monthSeq;
+  let next;
+  try {
+    next = { month, ...(await listExpensesOfMonth(currentUser.uid, month)) };
+  } catch (error) {
+    console.error('[despesas] falha ao carregar o resumo do mês', error);
+    next = { month, failed: true };
+  }
+  if (seq === monthSeq) monthData = next;
+}
+
+/** Itens completos do mês filtrado (quando já carregados); senão, os da página carregada. */
+function filterSource() {
+  const complete = currentFilter.month && monthData && monthData.month === currentFilter.month && !monthData.failed;
+  return complete ? [...monthData.items].reverse() : expensesCache;
+}
+
+function buildMonthSummary() {
+  const month = summaryMonth();
+  const ready = monthData && monthData.month === month;
+  const summary = ready && !monthData.failed
+    ? summarizeMovements(filterMovements(monthData.items, { status: 'all', month: null, categoryId: currentFilter.categoryId }, { dateField: 'dueDate' }),
+      { settledStatus: 'paid', dateField: 'dueDate', today: todayInAppZone() })
+    : null;
+  return createMonthSummary({ month, summary, truncated: Boolean(ready && monthData.truncated), failed: Boolean(ready && monthData.failed),
+    labels: { total: 'Previsto no mês', settled: 'Pago', pending: 'A pagar', settledIcon: 'check-circle-2', tone: 'expense' } });
+}
+
+/** Recarrega e redesenha só o resumo (troca de mês). */
+async function refreshSummary() {
+  const mark = pageRoot;
+  const slot = mark?.querySelector('#month-summary');
+  if (slot) slot.replaceWith(buildMonthSummary());
+  await loadMonthData();
+  const again = mark?.querySelector('#month-summary');
+  if (again) again.replaceWith(buildMonthSummary());
+  refreshTable();
+  refreshIcons();
 }
 
 async function loadMore() {
@@ -75,8 +128,6 @@ async function loadMore() {
 
 /** Renderiza a página completa. */
 function renderPage(container) {
-  const stats = computeStats();
-
   const header = el('section', { class: 'panel' }, [
     el('div', { class: 'panel__header' }, [
       el('span', { class: 'card__icon' }, [el('i', { 'data-lucide': 'trending-down', 'aria-hidden': 'true' })]),
@@ -95,10 +146,7 @@ function renderPage(container) {
     ]),
   ]);
 
-  const cards = el('div', { class: 'grid grid--cards' }, [
-    createStatCard('Pago no mês', formatCents(stats.paidThisMonth), 'check-circle-2', 'expense', 'Status "paga" no mês atual'),
-    createStatCard('Pendente no mês', formatCents(stats.pendingThisMonth), 'clock', null, 'Pendentes não reduzem o saldo'),
-  ]);
+  const cards = buildMonthSummary();
 
   const filterBar = createFilterBar();
   const table = createExpensesTable();
@@ -122,26 +170,6 @@ function renderPage(container) {
   refreshIcons();
 }
 
-/** Computa estatísticas rápidas do mês atual. */
-function computeStats() {
-  const month = currentMonthKey(); // mês corrente no fuso America/Sao_Paulo
-
-  let paidThisMonth = 0;
-  let pendingThisMonth = 0;
-
-  for (const expense of expensesCache) {
-    const isThisMonth = String(expense.dueDate).slice(0, 7) === month;
-
-    if (expense.status === 'paid' && isThisMonth) {
-      paidThisMonth += Number(expense.amountCents) || 0;
-    } else if (expense.status === 'pending' && isThisMonth) {
-      pendingThisMonth += Number(expense.amountCents) || 0;
-    }
-  }
-
-  return { paidThisMonth, pendingThisMonth };
-}
-
 /** Cria barra de filtros. */
 function createFilterBar() {
   const statusOptions = [
@@ -152,13 +180,8 @@ function createFilterBar() {
   ];
 
   const monthOptions = [{ value: '', label: 'Todos os meses' }];
-  const months = new Set();
-  for (const expense of expensesCache) {
-    const m = expense.dueDate?.substring(0, 7);
-    if (m) months.add(m);
-  }
-  const sortedMonths = Array.from(months).sort().reverse();
-  for (const m of sortedMonths) {
+  const loaded = new Set((expensesCache).map((i) => String(i.dueDate ?? '').slice(0, 7)));
+  for (const m of monthChoices(loaded, { current: currentMonthKey(), selected: currentFilter.month })) {
     const [y, mo] = m.split('-');
     monthOptions.push({ value: m, label: `${mo}/${y}` });
   }
@@ -188,6 +211,7 @@ function createFilterBar() {
             onChange: (e) => {
               currentFilter.month = e.target.value || null;
               refreshTable();
+              refreshSummary();
             },
           }, monthOptions.map((o) => el('option', { value: o.value, selected: currentFilter.month === o.value }, o.label))),
         ]),
@@ -199,6 +223,7 @@ function createFilterBar() {
             onChange: (e) => {
               currentFilter.categoryId = e.target.value || null;
               refreshTable();
+              refreshSummary();
             },
           }, [
             el('option', { value: '', selected: !currentFilter.categoryId }, 'Todas as categorias'),
@@ -219,7 +244,7 @@ function createFilterBar() {
  * únicos, sem índice composto novo).
  */
 function getFilteredExpenses() {
-  return filterMovements(expensesCache, currentFilter, { dateField: 'dueDate' });
+  return filterMovements(filterSource(), currentFilter, { dateField: 'dueDate' });
 }
 
 /** true quando algum filtro de status/mês/categoria está ativo. */

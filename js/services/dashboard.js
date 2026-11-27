@@ -23,6 +23,7 @@ import {
   debtorsOverview,
   subscriptionsOverview,
   monthForecast,
+  periodOverview,
   totalBalanceCents,
   upcomingDue,
 } from '../core/aggregates.js';
@@ -169,6 +170,7 @@ export async function loadDashboard(uid, io = {}) {
     freeBalanceCents: totalCents !== null && linkedCents !== null ? totalCents - linkedCents : null,
     result,
     monthlyForecast: monthlyForecastData,
+    overview: result && monthPending ? periodOverview(result, monthPending.incomes, monthPending.expenses) : null,
     forecast: result && monthPending ? monthForecast(result, monthPending.incomes, monthPending.expenses) : null,
     cardInvoices: cardInvoices ? cardInvoicesSummary({ ...cardInvoices, month }) : null,
     upcoming: upcomingDue({ expenses: pendingExpenses, subscriptions: subscriptions ?? [], invoices, today }),

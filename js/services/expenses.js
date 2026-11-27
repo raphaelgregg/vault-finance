@@ -3,7 +3,7 @@
  * Isolamento por usuário via users/{uid}/expenses.
  */
 import { COLLECTIONS, RECURRENCES } from '../utils/constants.js';
-import { todayInAppZone } from '../utils/dates.js';
+import { todayInAppZone, monthBounds } from '../utils/dates.js';
 import {
   list,
   getById,
@@ -49,6 +49,22 @@ export async function listExpenses(uid, options = {}) {
   if (options.startAfterId) constraints.startAfterId = options.startAfterId;
   if (options.limit) constraints.limit = options.limit;
   return list(uid, COLLECTION, constraints);
+}
+
+/**
+ * Todos os lançamentos do mês "AAAA-MM" (por `dueDate`), sem depender da página carregada. Teto de 1000 (cota);
+ * `truncated` avisa se o mês tem mais que isso. Usa só o índice simples do campo (sem índice composto novo).
+ */
+export async function listExpensesOfMonth(uid, month, io = {}) {
+  const bounds = monthBounds(month);
+  if (!bounds) throw new Error('Mês inválido.');
+  const LIMIT = 1000;
+  const items = await (io.list ?? listExpenses)(uid, {
+    where: [['dueDate', '>=', bounds.start], ['dueDate', '<=', bounds.end]],
+    orderBy: ['dueDate', 'desc'],
+    limit: LIMIT,
+  });
+  return { items, truncated: items.length >= LIMIT };
 }
 
 /** Busca uma despesa por ID. */

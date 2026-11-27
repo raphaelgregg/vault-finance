@@ -644,7 +644,7 @@
      "id": "o-que-mostra",
      "heading": "O que mostra",
      "level": 2,
-     "md": "- **Visão geral:** saldo total das contas e resultado do período (receitas e despesas **realizadas**). Períodos: mês (padrão), semestre, ano e todo o período.\n- **Pontos de atenção:** vencidos, orçamentos estourados, avisos de leitura truncada.\n- **Previsão do mês** e o bloco **\"Como o saldo projetado foi calculado\"** (transparência da conta), mais **compromissos dos próximos meses**.\n- **Próximos vencimentos**, **orçamentos** do mês, **devedores** (a receber) e cartões/faturas."
+     "md": "- **Visão geral:** saldo total das contas e resultado do período (**realizado**: recebido − pago). Períodos: mês (padrão), semestre, ano e todo o período.\n- **Entradas e saídas do período** (`#dashboard-overview`, VF-UX-01): tabela com três linhas — **Realizado** (recebido/pago, por `receivedDate`/`paidDate`), **Pendente** (a receber/a pagar, por `expectedDate`/`dueDate`) e **Total do período** (previsto = realizado + pendente) — e o resultado de cada uma. Um mês futuro, sem nada liquidado, mostra o pendente em vez de \"zero\" confuso. Cálculo: `periodOverview` (`js/core/aggregates.js`). Não inclui pagamentos de fatura de cartão nem recebimentos de devedores (aparecem em suas áreas).\n- **Pontos de atenção:** vencidos, orçamentos estourados, avisos de leitura truncada.\n- **Previsão do mês** e o bloco **\"Como o saldo projetado foi calculado\"** (transparência da conta), mais **compromissos dos próximos meses**.\n- **Próximos vencimentos**, **orçamentos** do mês, **devedores** (a receber) e cartões/faturas."
     },
     {
      "id": "como-carrega-os-dados",
@@ -790,6 +790,12 @@
      "md": "```\ncriar (pending) ──► marcar como recebida (servidor) ──► estornar (servidor)\n      │                                                       \n      └──► cancelar / editar / excluir (cliente, só enquanto não recebida)\n```\n\n| Passo | Quem faz | Detalhe |\n|---|---|---|\n| Criar | **Servidor** (`income.create`) | Valida categoria (tipo) e conta (ativa) dentro da transação. Pedir `received` já liquida e entra no saldo atomicamente. O cliente valida o modelo antes (`createIncome`, `js/services/incomes.js:76`). |\n| Editar | Cliente (Firestore) | **Só receita não recebida.** Se o formulário pede `received`, grava como prevista e chama o servidor para receber. |\n| **Receber** | **Servidor** (`income.receive`) | Só de `pending`; atualiza status e `receivedDate` e incrementa `ledgerSeq`. |\n| Cancelar | Cliente | Só `pending`. |\n| Excluir | Cliente | Só não recebida e **não estornada** (Rules). |\n| **Estornar** | **Servidor** (`reversal.create`, kind `income`) | Recebida é **imutável**; correção = estorno com motivo (3–300 caracteres). Modal em `js/components/reversal-modal.js`. |\n\nAs Rules **proíbem** o cliente de gravar `status: received` ou de editar uma receita já recebida. Idempotência: o formulário gera `operationId` ao abrir."
     },
     {
+     "id": "resumo-do-mes-vf-ux-01",
+     "heading": "Resumo do mês (VF-UX-01)",
+     "level": 2,
+     "md": "Painel `#month-summary` acima dos filtros, para o **mês selecionado** (sem filtro, o mês atual): **Previsto no mês** (= recebido + a receber), **Recebido** e **A receber** (com o valor em atraso). Cancelados ficam fora dos totais. Os totais vêm de `listIncomesOfMonth` (`js/services/incomes.js`), que lê **todo o mês** por intervalo de data (teto 1000; avisa se truncar) e **não depende da página carregada**. Ao escolher um mês no filtro, a tabela também passa a usar esses itens completos. O seletor de mês oferece os meses carregados, o atual e os 6 seguintes. Respeita o filtro de categoria; o de status não (o resumo já separa por status). Componente: `js/components/month-summary.js`."
+    },
+    {
      "id": "tela",
      "heading": "Tela",
      "level": 2,
@@ -842,6 +848,12 @@
      "heading": "Ciclo de vida",
      "level": 2,
      "md": "Igual ao de receitas, com o sinal invertido:\n\n| Passo | Quem faz | Detalhe |\n|---|---|---|\n| Criar | **Servidor** (`expense.create`) | Categoria `expense`/`both`; conta ativa. Se já nasce `paid`, **checa saldo suficiente** e debita atomicamente. |\n| Editar / cancelar / excluir | Cliente | **Só despesa não paga.** Paga é imutável. |\n| **Pagar** | **Servidor** (`expense.pay`) | Só de `pending`; recusa com `INSUFFICIENT_BALANCE` se o saldo da conta não cobre. |\n| **Estornar** | **Servidor** (`reversal.create`, kind `expense`) | Lançamento compensatório com motivo. |\n\nAs compras no cartão **não são despesas**: a conta só é debitada quando a **fatura** é paga (`invoice.pay`), sem dupla contagem. Ver [Cartões](doc:cartoes)."
+    },
+    {
+     "id": "resumo-do-mes-vf-ux-01",
+     "heading": "Resumo do mês (VF-UX-01)",
+     "level": 2,
+     "md": "Painel `#month-summary` acima dos filtros, para o **mês selecionado** (sem filtro, o mês atual): **Previsto no mês** (= pago + a pagar), **Pago** e **A pagar** (com o valor em atraso). Cancelados ficam fora dos totais. Os totais vêm de `listExpensesOfMonth` (`js/services/expenses.js`), que lê **todo o mês** por intervalo de data (teto 1000; avisa se truncar) e **não depende da página carregada**. Ao escolher um mês no filtro, a tabela também passa a usar esses itens completos. O seletor de mês oferece os meses carregados, o atual e os 6 seguintes. Respeita o filtro de categoria; o de status não (o resumo já separa por status). Componente: `js/components/month-summary.js`."
     },
     {
      "id": "tela",
@@ -1373,7 +1385,7 @@
      "id": "e2e-tests-e2e",
      "heading": "E2E (tests/e2e/)",
      "level": 2,
-     "md": "`harness.mjs` sobe um servidor estático + `/api/finance` (o mesmo handler da Vercel) e controla o Chromium via Playwright. O SDK do Firebase é servido do `node_modules/firebase` local (versão pode diferir da fixada no import map; a chave `integrity` é removida **só no harness**). Cenários: **navegação sem recarregar** (`navigation.mjs`: o documento não recarrega, voltar/avançar, cliques concorrentes, modal, `#novo`, playbook, sair), login/cadastro e troca de senha (`auth.mjs`), fluxos principais (`flows.mjs`), movimentos, devedores, manutenção, Central de validação, CSV, estornos e visibilidade, todas as páginas, tabelas, responsividade, confirmações, edição de compra no cartão e campos de data. **Não rodam no CI** (exigem navegador). Se `playwright` não existir, os scripts saem com aviso."
+     "md": "`harness.mjs` sobe um servidor estático + `/api/finance` (o mesmo handler da Vercel) e controla o Chromium via Playwright. O SDK do Firebase é servido do `node_modules/firebase` local (versão pode diferir da fixada no import map; a chave `integrity` é removida **só no harness**). Cenários: **resumo do mês** (`month-summary.mjs`: totais do mês selecionado em Receitas/Despesas e Dashboard), **navegação sem recarregar** (`navigation.mjs`: o documento não recarrega, voltar/avançar, cliques concorrentes, modal, `#novo`, playbook, sair), login/cadastro e troca de senha (`auth.mjs`), fluxos principais (`flows.mjs`), movimentos, devedores, manutenção, Central de validação, CSV, estornos e visibilidade, todas as páginas, tabelas, responsividade, confirmações, edição de compra no cartão e campos de data. **Não rodam no CI** (exigem navegador). Se `playwright` não existir, os scripts saem com aviso."
     },
     {
      "id": "como-escrever-um-teste-novo",
@@ -1594,7 +1606,7 @@
      "id": "testes",
      "heading": "Testes",
      "level": 2,
-     "md": "| Pasta | Arquivos |\n| --- | --- |\n| `tests/model/` | 6 |\n| `tests/services/` | 39 |\n| `tests/rules/` | 1 |\n| `tests/integration/` | 12 |\n| `tests/e2e/` | 19 |"
+     "md": "| Pasta | Arquivos |\n| --- | --- |\n| `tests/model/` | 7 |\n| `tests/services/` | 39 |\n| `tests/rules/` | 1 |\n| `tests/integration/` | 12 |\n| `tests/e2e/` | 20 |"
     },
     {
      "id": "workflows-do-github",

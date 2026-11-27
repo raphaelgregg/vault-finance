@@ -13,7 +13,8 @@ Rota `/dashboard` (primeira do menu). **Somente leitura**: nada é gravado, tudo
 
 ## O que mostra
 
-- **Visão geral:** saldo total das contas e resultado do período (receitas e despesas **realizadas**). Períodos: mês (padrão), semestre, ano e todo o período.
+- **Visão geral:** saldo total das contas e resultado do período (**realizado**: recebido − pago). Períodos: mês (padrão), semestre, ano e todo o período.
+- **Entradas e saídas do período** (`#dashboard-overview`, VF-UX-01): tabela com três linhas — **Realizado** (recebido/pago, por `receivedDate`/`paidDate`), **Pendente** (a receber/a pagar, por `expectedDate`/`dueDate`) e **Total do período** (previsto = realizado + pendente) — e o resultado de cada uma. Um mês futuro, sem nada liquidado, mostra o pendente em vez de "zero" confuso. Cálculo: `periodOverview` (`js/core/aggregates.js`). Não inclui pagamentos de fatura de cartão nem recebimentos de devedores (aparecem em suas áreas).
 - **Pontos de atenção:** vencidos, orçamentos estourados, avisos de leitura truncada.
 - **Previsão do mês** e o bloco **"Como o saldo projetado foi calculado"** (transparência da conta), mais **compromissos dos próximos meses**.
 - **Próximos vencimentos**, **orçamentos** do mês, **devedores** (a receber) e cartões/faturas.

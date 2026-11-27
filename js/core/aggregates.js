@@ -175,6 +175,42 @@ export function monthForecast(result = { incomeCents: 0, expenseCents: 0 }, pend
   };
 }
 
+/**
+ * Resumo de um conjunto de movimentos (receitas ou despesas) JÁ filtrado por mês. Puro (VF-UX-01).
+ * `settledStatus`: 'received' (receitas) ou 'paid' (despesas). Canceladas não entram nos totais, só na contagem.
+ * `totalCents` = liquidado + pendente (o "previsto do mês"); `overdueCents` = pendentes com data anterior a `today`.
+ */
+export function summarizeMovements(items = [], { settledStatus, dateField, today = null } = {}) {
+  const out = { count: 0, cancelledCount: 0, settledCents: 0, pendingCents: 0, overdueCents: 0, totalCents: 0 };
+  for (const item of items) {
+    if (!item) continue;
+    if (item.status === 'cancelled') { out.cancelledCount += 1; continue; }
+    out.count += 1;
+    const value = cents(item.amountCents);
+    if (item.status === settledStatus) out.settledCents += value;
+    else if (item.status === 'pending') {
+      out.pendingCents += value;
+      if (today && typeof item[dateField] === 'string' && item[dateField] < today) out.overdueCents += value;
+    }
+  }
+  out.totalCents = out.settledCents + out.pendingCents;
+  return out;
+}
+
+/**
+ * Entradas e saídas do período em uma só visão: realizado (recebido/pago) + a receber/a pagar = previsto do período.
+ * `result` vem de `periodResult` (realizado por data de recebimento/pagamento); os pendentes, de `monthPending`. Puro.
+ */
+export function periodOverview(result = { incomeCents: 0, expenseCents: 0 }, pendingIncomes = [], pendingExpenses = []) {
+  const f = monthForecast(result, pendingIncomes, pendingExpenses);
+  return {
+    income: { settledCents: result.incomeCents, pendingCents: f.incomeCents, totalCents: result.incomeCents + f.incomeCents },
+    expense: { settledCents: result.expenseCents, pendingCents: f.expenseCents, totalCents: result.expenseCents + f.expenseCents },
+    realizedResultCents: result.incomeCents - result.expenseCents,
+    forecastResultCents: f.forecastResultCents,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Dashboard por período e visões de contas/cartões/assinaturas (puras)
 // ---------------------------------------------------------------------------

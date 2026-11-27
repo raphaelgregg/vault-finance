@@ -34,6 +34,10 @@ criar (pending) ──► marcar como recebida (servidor) ──► estornar (se
 
 As Rules **proíbem** o cliente de gravar `status: received` ou de editar uma receita já recebida. Idempotência: o formulário gera `operationId` ao abrir.
 
+## Resumo do mês (VF-UX-01)
+
+Painel `#month-summary` acima dos filtros, para o **mês selecionado** (sem filtro, o mês atual): **Previsto no mês** (= recebido + a receber), **Recebido** e **A receber** (com o valor em atraso). Cancelados ficam fora dos totais. Os totais vêm de `listIncomesOfMonth` (`js/services/incomes.js`), que lê **todo o mês** por intervalo de data (teto 1000; avisa se truncar) e **não depende da página carregada**. Ao escolher um mês no filtro, a tabela também passa a usar esses itens completos. O seletor de mês oferece os meses carregados, o atual e os 6 seguintes. Respeita o filtro de categoria; o de status não (o resumo já separa por status). Componente: `js/components/month-summary.js`.
+
 ## Tela
 
 Tabela com ordenação por coluna e filtro de texto (`table-tools`), barra de filtros (status, mês, categoria), badge com a contagem e **paginação por cursor** (`createPager`, `createPagerFooter`: "carregar mais"). `listIncomes` ordena por `expectedDate` decrescente.

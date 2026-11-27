@@ -125,7 +125,7 @@ function draw(container, data, rerender) {
       ]),
     ]),
     el('dl', { class: 'hero__stats' }, [
-      stat(`Resultado — ${period.label}`, money(result?.resultCents), result ? `Receitas ${formatCents(result.incomeCents)} − despesas ${formatCents(result.expenseCents)}` : unavailable, tone(result?.resultCents)),
+      stat(`Resultado — ${period.label}`, money(result?.resultCents), result ? `Recebido ${formatCents(result.incomeCents)} − pago ${formatCents(result.expenseCents)}${data.overview ? ` · previsto do período ${formatCents(data.overview.forecastResultCents)}` : ''}` : unavailable, tone(result?.resultCents)),
       stat('Faturas a pagar', data.cardsView ? formatCents(data.cardsView.dueCents) : '—', data.cardsView ? 'Vencidas e a próxima fatura de cada cartão (parcelas futuras não entram)' : unavailable, data.cardsView?.dueCents > 0 ? ' stat__value--expense' : ''),
       stat('A receber de devedores', money(debtors?.pendingCents), debtors ? `${debtors.openCount} devedor(es) em aberto` : unavailable, debtors?.pendingCents > 0 ? ' stat__value--income' : ''),
       stat('Posição líquida', money(data.netPositionCents), data.netPositionCents === null ? unavailable : 'Saldo + a receber − faturas a pagar (vencidas e próximas)', tone(data.netPositionCents)),
@@ -229,11 +229,29 @@ function draw(container, data, rerender) {
   const snapshot = el('div', { class: 'grid grid--panels', id: 'dashboard-snapshot' }, [accountsPanel, subsPanel, debtorsPanel, cardsPanel]);
 
   // ---- 4. Receitas × despesas do período ----
-  const monthSection = sec(`Receitas × despesas — ${period.label}`, [
-    statCard('Receitas', money(result?.incomeCents), 'trending-up', forecast ? `Realizado · previsto pendente ${formatCents(forecast.incomeCents)}` : (result ? 'Realizado (previsto indisponível)' : unavailable), 'income'),
-    statCard('Despesas', money(result?.expenseCents), 'trending-down', forecast ? `Realizado · previsto pendente ${formatCents(forecast.expenseCents)}` : (result ? 'Realizado (previsto indisponível)' : unavailable), 'expense'),
-    statCard('Resultado', money(result?.resultCents), 'scale', forecast ? `Realizado · previsto ${formatCents(forecast.forecastResultCents)}` : (result ? 'Realizado' : unavailable)),
-  ], { hint: 'Realizado = receitas recebidas e despesas pagas no período. Previsto = pendentes com data prevista no período.' });
+  const ov = data.overview;
+  const monthSection = el('section', { class: 'panel', id: 'dashboard-overview' }, [
+    el('div', { class: 'panel__header' }, [el('div', {}, [
+      el('h2', { text: `Entradas e saídas — ${period.label}` }),
+      el('p', { class: 'card__hint', text: 'Realizado = recebido e pago no período (pela data de recebimento/pagamento). Pendente = a receber e a pagar com data prevista no período. Total = realizado + pendente.' }),
+    ])]),
+    el('div', { class: 'panel__body panel__body--flush' }, [ov
+      ? dataTable({
+        stack: true,
+        columns: [
+          { label: 'Situação', render: (_, r) => r.label },
+          { label: 'Entradas', numeric: true, render: (_, r) => formatCents(r.income) },
+          { label: 'Saídas', numeric: true, render: (_, r) => formatCents(r.expense) },
+          { label: 'Resultado', numeric: true, render: (_, r) => formatCents(r.income - r.expense) },
+        ],
+        rows: [
+          { label: 'Realizado (recebido / pago)', income: ov.income.settledCents, expense: ov.expense.settledCents },
+          { label: 'Pendente (a receber / a pagar)', income: ov.income.pendingCents, expense: ov.expense.pendingCents },
+          { label: 'Total do período (previsto)', income: ov.income.totalCents, expense: ov.expense.totalCents },
+        ],
+      })
+      : el('p', { class: 'card__hint', role: 'status', text: result ? 'Pendentes indisponíveis nesta carga: só o realizado é conhecido.' : unavailable })]),
+  ]);
   const series = data.series ?? [];
   const seriesPanel = period.mode !== 'month' && series.length
     ? panel(`Mês a mês — ${period.label}`, 'bar-chart-3', 'Realizado por mês.',

@@ -28,6 +28,10 @@ Igual ao de receitas, com o sinal invertido:
 
 As compras no cartão **não são despesas**: a conta só é debitada quando a **fatura** é paga (`invoice.pay`), sem dupla contagem. Ver [Cartões](doc:cartoes).
 
+## Resumo do mês (VF-UX-01)
+
+Painel `#month-summary` acima dos filtros, para o **mês selecionado** (sem filtro, o mês atual): **Previsto no mês** (= pago + a pagar), **Pago** e **A pagar** (com o valor em atraso). Cancelados ficam fora dos totais. Os totais vêm de `listExpensesOfMonth` (`js/services/expenses.js`), que lê **todo o mês** por intervalo de data (teto 1000; avisa se truncar) e **não depende da página carregada**. Ao escolher um mês no filtro, a tabela também passa a usar esses itens completos. O seletor de mês oferece os meses carregados, o atual e os 6 seguintes. Respeita o filtro de categoria; o de status não (o resumo já separa por status). Componente: `js/components/month-summary.js`.
+
 ## Tela
 
 Mesmo padrão de Receitas: filtros, ordenação, paginação por cursor. `listExpenses` ordena por `dueDate` crescente (vencimentos mais próximos primeiro). O orçamento mensal por categoria (ver [Orçamentos](doc:orcamentos)) soma despesas **não canceladas** pelo mês de **vencimento**.
